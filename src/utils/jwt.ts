@@ -1,0 +1,98 @@
+// Ensure dotenv is loaded before accessing environment variables
+const dotenv = require("dotenv");
+dotenv.config({ path: "./src/config/.env" });
+
+const jwt = require("jsonwebtoken");
+
+interface TokenPayload {
+    email: string;
+    role: string;
+}
+
+/**
+ * Generate JWT token for admin
+ * @param email - Admin email
+ * @returns JWT token string
+ */
+exports.generateAdminToken = (email: string): string => {
+    const secret = process.env.JWT_SECRET;
+    
+    if (!secret) {
+        throw new Error("JWT_SECRET is not defined in environment variables");
+    }
+
+    const payload: TokenPayload = {
+        email,
+        role: "admin"
+    };
+
+    const expiresIn = process.env.JWT_EXPIRY || "24h"; // Default 24 hours
+
+    return jwt.sign(payload, secret, { expiresIn });
+};
+
+/**
+ * Generate JWT token for user or supervisor
+ * @param email - User email
+ * @param role - User role ("user" or "supervisor")
+ * @returns JWT token string
+ */
+exports.generateUserToken = (email: string, role: string): string => {
+    const secret = process.env.JWT_SECRET;
+    
+    if (!secret) {
+        throw new Error("JWT_SECRET is not defined in environment variables");
+    }
+
+    if (role !== "user" && role !== "supervisor") {
+        throw new Error("Invalid role. Must be 'user' or 'supervisor'");
+    }
+
+    const payload: TokenPayload = {
+        email,
+        role
+    };
+
+    const expiresIn = process.env.JWT_EXPIRY || "24h"; // Default 24 hours
+
+    return jwt.sign(payload, secret, { expiresIn });
+};
+
+/**
+ * Verify JWT token
+ * @param token - JWT token string
+ * @returns Decoded token payload or null if invalid
+ */
+exports.verifyToken = (token: string): TokenPayload | null => {
+    try {
+        const secret = process.env.JWT_SECRET;
+        
+        if (!secret) {
+            throw new Error("JWT_SECRET is not defined in environment variables");
+        }
+
+        const decoded = jwt.verify(token, secret) as TokenPayload;
+        return decoded;
+    } catch (error) {
+        return null;
+    }
+};
+
+/**
+ * Extract token from Authorization header
+ * @param authHeader - Authorization header value (e.g., "Bearer <token>")
+ * @returns Token string or null
+ */
+exports.extractTokenFromHeader = (authHeader: string | undefined): string | null => {
+    if (!authHeader) {
+        return null;
+    }
+
+    const parts = authHeader.split(" ");
+    if (parts.length !== 2 || parts[0] !== "Bearer") {
+        return null;
+    }
+
+    return parts[1] ?? null;
+};
+

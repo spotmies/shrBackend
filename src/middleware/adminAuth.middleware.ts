@@ -1,0 +1,67 @@
+import type { Request, Response, NextFunction } from "express";
+// Ensure dotenv is loaded before accessing environment variables
+const dotenv = require("dotenv");
+dotenv.config({ path: "./src/config/.env" });
+const { verifyToken, extractTokenFromHeader } = require("../utils/jwt");
+
+interface AuthRequest extends Request {
+    user?: {
+        email: string;
+        role: string;
+    };
+}
+
+/**
+ * Admin authentication middleware
+ * Verifies JWT token and ensures user has admin role
+ * @param req - Express request object
+ * @param res - Express response object
+ * @param next - Express next function
+ */
+
+exports.adminAuthMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        // Extract token from Authorization header
+        const authHeader = req.headers.authorization;
+        const token = extractTokenFromHeader(authHeader);
+
+        if (!token) {
+            return res.status(401).json({
+                success: false,
+                message: "Authorization token is required. Please provide a valid Bearer token."
+            });
+        }
+
+        // Verify token
+        const decoded = verifyToken(token);
+
+        if (!decoded) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid or expired token. Please login again."
+            });
+        }
+
+        // Check if user has admin role
+        if (decoded.role !== "admin") {
+            return res.status(403).json({
+                success: false,
+                message: "Access denied. Admin privileges required."
+            });
+        }
+
+        // Attach user info to request object
+        req.user = {
+            email: decoded.email,
+            role: decoded.role
+        };
+
+        next();
+    } catch (error) {
+        return res.status(401).json({
+            success: false,
+            message: "Authentication failed. Please login again."
+        });
+    }
+};
+

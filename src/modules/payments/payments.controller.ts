@@ -1,0 +1,453 @@
+import type { Request,Response} from "express";
+const PaymentServices = require("./payments.services.ts");
+
+/**
+ * @swagger
+ * /api/payment/createpayment:
+ *   post:
+ *     summary: Create a new payment (Admin only)
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: ["amount", "projectId", "paymentStatus", "paymentMethod", "paymentDate"]
+ *             properties:
+ *               amount:
+ *                 type: number
+ *                 format: decimal
+ *                 example: 50000.00
+ *               remarks:
+ *                 type: string
+ *                 example: "Payment for foundation work"
+ *                 description: Optional remarks about the payment
+ *               projectId:
+ *                 type: string
+ *                 format: uuid
+ *                 example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
+ *               paymentStatus:
+ *                 type: string
+ *                 enum: ["pending", "completed", "failed", "refunded"]
+ *                 example: "pending"
+ *               paymentMethod:
+ *                 type: string
+ *                 enum: ["cash", "card", "bank_transfer", "cheque", "online"]
+ *                 example: "cash"
+ *               paymentDate:
+ *                 type: string
+ *                 format: date
+ *                 example: "2024-01-15"
+ *     responses:
+ *       201:
+ *         description: Payment created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         paymentId:
+ *                           type: string
+ *                           format: uuid
+ *                         amount:
+ *                           type: number
+ *                         projectId:
+ *                           type: string
+ *                           format: uuid
+ *                         paymentStatus:
+ *                           type: string
+ *                         paymentMethod:
+ *                           type: string
+ *                         paymentDate:
+ *                           type: string
+ *                           format: date
+ *       400:
+ *         description: Bad request - Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+
+
+//post
+exports.createPayment = async(req: Request,res: Response)=>{
+    try{
+
+        const paymentData = await PaymentServices.createPayment(req.body);
+
+        return res.status(201).json({
+            success:true,
+            message:"Payment created successfully",
+            data:paymentData,
+        });
+
+    }catch(error){
+        return res.status(400).json({
+            success:false,
+            message:error instanceof Error ? error.message : String(error),
+            
+        });
+    }
+
+}
+
+/**
+ * @swagger
+ * /api/payment/getpayment/{paymentId}:
+ *   get:
+ *     summary: Get a payment by ID
+ *     tags: [Payments]
+ *     parameters:
+ *       - in: path
+ *         name: paymentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The payment ID
+ *     responses:
+ *       200:
+ *         description: Payment fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         paymentId:
+ *                           type: string
+ *                           format: uuid
+ *                         amount:
+ *                           type: number
+ *                         projectId:
+ *                           type: string
+ *                           format: uuid
+ *                         paymentStatus:
+ *                           type: string
+ *                         paymentMethod:
+ *                           type: string
+ *                         paymentDate:
+ *                           type: string
+ *                           format: date
+ *       400:
+ *         description: Bad request - Payment not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+//getId
+exports.getPaymentById = async(req:Request,res:Response)=>{
+    try{
+        const paymentId = req.params.paymentId;
+        const payment = await PaymentServices.getPaymentByPaymentId(paymentId);
+
+        return res.status(200).json({
+            success:true,
+            message:"Payment fetched successfully",
+            data:payment,
+        })
+    }catch(error){
+        return res.status(400).json({
+            success:false,
+            message:error instanceof Error ? error.message: String(error),
+        })
+    }
+}
+
+
+/**
+ * @swagger
+ * /api/payment/getallpayments:
+ *   get:
+ *     summary: Get all payments
+ *     tags: [Payments]
+ *     responses:
+ *       200:
+ *         description: Payments fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           paymentId:
+ *                             type: string
+ *                             format: uuid
+ *                           amount:
+ *                             type: number
+ *                           projectId:
+ *                             type: string
+ *                             format: uuid
+ *                           paymentStatus:
+ *                             type: string
+ *                           paymentMethod:
+ *                             type: string
+ *                           paymentDate:
+ *                             type: string
+ *                             format: date
+ *       400:
+ *         description: Bad request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+//get
+exports.getAllPayments = async(req:Request,res:Response)=>{
+    try{
+          const payments = await PaymentServices.getAllThePayments();
+
+          return res.status(200).json({
+            success:true,
+            message:"Payments fetched successfully",
+            data:payments
+          })
+    }catch(error){
+        return res.status(400).json({
+            success:false,
+            message:error instanceof Error ? error.message: String(error),
+        })
+    }
+}
+
+
+/**
+ * @swagger
+ * /api/payment/updatepayment/{paymentId}:
+ *   put:
+ *     summary: Update a payment (Admin only)
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: paymentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The payment ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               amount:
+ *                 type: number
+ *                 format: decimal
+ *                 example: 60000.00
+ *               remarks:
+ *                 type: string
+ *                 example: "Updated payment remarks"
+ *                 description: Optional remarks about the payment
+ *               projectId:
+ *                 type: string
+ *                 format: uuid
+ *                 example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
+ *               paymentStatus:
+ *                 type: string
+ *                 enum: ["pending", "completed", "failed", "refunded"]
+ *                 example: "completed"
+ *               paymentMethod:
+ *                 type: string
+ *                 enum: ["cash", "card", "bank_transfer", "cheque", "online"]
+ *                 example: "card"
+ *               paymentDate:
+ *                 type: string
+ *                 format: date
+ *                 example: "2024-01-20"
+ *     responses:
+ *       200:
+ *         description: Payment updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         paymentId:
+ *                           type: string
+ *                           format: uuid
+ *                         amount:
+ *                           type: number
+ *                         projectId:
+ *                           type: string
+ *                           format: uuid
+ *                         paymentStatus:
+ *                           type: string
+ *                         paymentMethod:
+ *                           type: string
+ *                         paymentDate:
+ *                           type: string
+ *                           format: date
+ *       400:
+ *         description: Bad request - Payment not found or validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+//put
+exports.updatePayment = async(req:Request , res:Response)=>{
+    try{
+        const paymentId = req.params.paymentId;
+
+        const updatedData = await PaymentServices.updatePayment(paymentId, req.body);
+
+        return res.status(200).json({
+            success:true,
+            message:"Payment updated successfully",
+            data:updatedData,
+        })
+    }catch(error){
+        return res.status(400).json({
+            success:false,
+            message:error instanceof Error ? error.message : String(error),
+        })
+    }
+}
+
+
+/**
+ * @swagger
+ * /api/payment/deletepayment/{paymentId}:
+ *   delete:
+ *     summary: Delete a payment (Admin only)
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: paymentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The payment ID
+ *     responses:
+ *       200:
+ *         description: Payment deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         success:
+ *                           type: boolean
+ *                         message:
+ *                           type: string
+ *       400:
+ *         description: Bad request - Payment not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+//delete
+exports.deletePayment = async(req:Request,res:Response)=>{
+    try{
+        const paymentId = req.params.paymentId;
+        const deletedData = await PaymentServices.deletePayment(paymentId)
+        return res.status(200).json({
+            success:true,
+            message:"Payment deleted successfully",
+            data:deletedData,
+        })
+    }catch(error){
+        return res.status(400).json({
+            success:false,
+            message:error instanceof Error ? error.message: String(error),
+        })
+    }
+}
+
+/**
+ * @swagger
+ * /api/payment/budget-summary:
+ *   get:
+ *     summary: Get budget summary across all projects
+ *     tags: [Payments]
+ *     description: Calculates total budget, payment received, and payment pending from all projects
+ *     responses:
+ *       200:
+ *         description: Budget summary fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         totalBudget:
+ *                           type: number
+ *                           format: decimal
+ *                           example: 8450000
+ *                           description: Total budget across all projects
+ *                         paymentReceived:
+ *                           type: number
+ *                           format: decimal
+ *                           example: 1390000
+ *                           description: Total payments received (completed payments)
+ *                         paymentPending:
+ *                           type: number
+ *                           format: decimal
+ *                           example: 7060000
+ *                           description: Total pending amount (Total Budget - Payment Received)
+ *       400:
+ *         description: Bad request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+//get budget summary
+exports.getBudgetSummary = async(req:Request,res:Response)=>{
+    try{
+        const budgetSummary = await PaymentServices.getBudgetSummary();
+        return res.status(200).json({
+            success:true,
+            message:"Budget summary fetched successfully",
+            data:budgetSummary,
+        })
+    }catch(error){
+        return res.status(400).json({
+            success:false,
+            message:error instanceof Error ? error.message: String(error),
+        })
+    }
+}
+
