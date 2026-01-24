@@ -1,15 +1,16 @@
 const express = require("express");
 const router = express.Router();
 const QuotationController = require("./quotations.controller.ts");
-const upload = require("../../config/multer.js");
+const upload = require("../../config/multer.config").default;
 const { userAuthMiddleware } = require("../../middleware/userAuth.middleware.ts");
+const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware.ts");
 
 // ============================================
 // Public/Admin Routes (no user auth required)
 // ============================================
 
-// Create a new quotation (Admin only - should add adminAuthMiddleware if needed)
-router.post("/", upload.single("file"), QuotationController.createQuotation);
+// Create a new quotation (Admin only)
+router.post("/", adminAuthMiddleware, upload.single("file"), QuotationController.createQuotation);
 
 // Get all quotations (Public or Admin)
 router.get("/", QuotationController.getAllQuotations);

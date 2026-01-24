@@ -1,13 +1,13 @@
-const {
+import {
     Entity,
     PrimaryGeneratedColumn,
     Column,
     CreateDateColumn,
     UpdateDateColumn
-} = require("typeorm");
+} from "typeorm";
 
 @Entity({ name: "supervisors" })
-class SupervisorEntity {
+export class SupervisorEntity {
     @PrimaryGeneratedColumn("uuid")
     supervisorId!: string;
 
@@ -23,8 +23,11 @@ class SupervisorEntity {
     @Column({ type: "varchar", length: 255, nullable: true })
     password!: string | null;
 
-    @Column({ type: "enum", enum: ["Active", "Inactive"], default: "Active" })
+    @Column({ type: "enum", enum: ["Active", "Inactive", "reject"], default: "Active" })
     status!: string;
+
+    @Column({ type: "varchar", length: 50, nullable: true })
+    approve!: string | null;
 
     @CreateDateColumn({ name: "created_at" })
     createdAt!: Date;
@@ -33,5 +36,4 @@ class SupervisorEntity {
     updatedAt!: Date;
 }
 
-module.exports = SupervisorEntity;
 

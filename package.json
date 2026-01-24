@@ -8,13 +8,16 @@
     "start": "node dist/server.js",
     "migration:generate": "ts-node ./node_modules/typeorm/cli.js migration:generate -d src/data-source/typeorm.ts",
     "migration:run": "ts-node ./node_modules/typeorm/cli.js migration:run -d src/data-source/typeorm.ts",
-    "migration:revert": "ts-node ./node_modules/typeorm/cli.js migration:revert -d src/data-source/typeorm.ts"
+    "migration:revert": "ts-node ./node_modules/typeorm/cli.js migration:revert -d src/data-source/typeorm.ts",
+    "setup:bucket": "npx ts-node src/scripts/createSupabaseBucket.ts",
+    "setup:uploads-bucket": "npx ts-node src/scripts/createUploadsBucket.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@supabase/supabase-js": "^2.91.0",
     "bcrypt": "^6.0.0",
     "build": "^0.1.4",
     "class-transformer": "^0.5.1",

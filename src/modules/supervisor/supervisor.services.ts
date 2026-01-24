@@ -1,7 +1,7 @@
-const AppDataSource = require("../../data-source/typeorm.ts");
-const SupervisorEntity = require("./supervisor.entity");
-const UserEntity = require("../user/user.entity");
-const ProjectEntity = require("../project/project.entity");
+const { AppDataSource } = require("../../data-source/typeorm.ts");
+const { SupervisorEntity } = require("./supervisor.entity");
+const { UserEntity } = require("../user/user.entity");
+const { ProjectEntity } = require("../project/project.entity");
 const bcrypt = require("bcrypt");
 
 const repository = AppDataSource.getRepository(SupervisorEntity);
@@ -65,10 +65,10 @@ exports.createSupervisor = async (data: {
     });
 
     const savedSupervisor = await repository.save(newSupervisor);
-    
+
     // Remove password from response
     const { password, ...supervisorWithoutPassword } = savedSupervisor;
-    
+
     // Return supervisor data with user info
     return {
         ...supervisorWithoutPassword,
@@ -114,14 +114,14 @@ exports.getAllSupervisors = async () => {
     if (!supervisors) {
         return [];
     }
-    
+
     // Get projects count for each supervisor
     const supervisorsWithCounts = await Promise.all(
         supervisors.map(async (supervisor: InstanceType<typeof SupervisorEntity>) => {
             const projectsCount = await projectRepository.count({
                 where: { supervisorId: supervisor.supervisorId }
             });
-            
+
             const { password, ...supervisorWithoutPassword } = supervisor;
             return {
                 ...supervisorWithoutPassword,
@@ -129,7 +129,7 @@ exports.getAllSupervisors = async () => {
             };
         })
     );
-    
+
     return supervisorsWithCounts;
 };
 
@@ -165,7 +165,7 @@ exports.updateSupervisor = async (supervisorId: string, updateData: {
     if (updateData.email !== undefined) supervisor.email = updateData.email;
     if (updateData.phoneNumber !== undefined) supervisor.phoneNumber = updateData.phoneNumber;
     if (updateData.status !== undefined) supervisor.status = updateData.status;
-    
+
     // Handle password update (hash if provided)
     if (updateData.password !== undefined) {
         if (updateData.password === null || updateData.password.trim() === "") {
@@ -178,7 +178,7 @@ exports.updateSupervisor = async (supervisorId: string, updateData: {
     supervisor.updatedAt = new Date();
 
     const updatedSupervisor = await repository.save(supervisor);
-    
+
     // Remove password from response
     const { password, ...supervisorWithoutPassword } = updatedSupervisor;
     return supervisorWithoutPassword;
@@ -330,6 +330,36 @@ exports.getAssignedProjectsCount = async (supervisorId: string) => {
         supervisorId: supervisor.supervisorId,
         fullName: supervisor.fullName,
         email: supervisor.email,
+        assignedProjectsCount: projects.length,
+        projects: projects
+    };
+};
+
+// Get all assigned projects for a supervisor
+exports.getAssignedProjects = async (supervisorId: string) => {
+    if (!supervisorId) {
+        throw new Error("Supervisor ID is required");
+    }
+
+    const supervisor = await repository.findOne({
+        where: { supervisorId }
+    });
+
+    if (!supervisor) {
+        throw new Error("Supervisor not found");
+    }
+
+    // Get all assigned projects with relations
+    const projects = await projectRepository.find({
+        where: { supervisorId },
+        relations: ["user", "supervisor"],
+        order: { createdAt: "DESC" }
+    });
+
+    return {
+        supervisorId: supervisor.supervisorId,
+        supervisorName: supervisor.fullName,
+        supervisorEmail: supervisor.email,
         assignedProjectsCount: projects.length,
         projects: projects
     };

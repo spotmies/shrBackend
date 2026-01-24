@@ -3,8 +3,8 @@ const dotenv = require("dotenv");
 dotenv.config({ path: "./src/config/.env" });
 
 const { generateAdminToken, generateUserToken } = require("../../utils/jwt");
-const AppDataSource = require("../../data-source/typeorm.ts");
-const UserEntity = require("../user/user.entity.ts");
+const { AppDataSource } = require("../../data-source/typeorm.ts");
+const { UserEntity } = require("../user/user.entity.ts");
 const bcrypt = require("bcrypt");
 
 
@@ -83,7 +83,7 @@ exports.userLogin = async (email: string, password: string) => {
 
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.password);
-    
+
     if (!isPasswordValid) {
         throw new Error("Invalid email or password");
     }
@@ -150,7 +150,7 @@ exports.supervisorLogin = async (email: string, password: string) => {
 
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.password);
-    
+
     if (!isPasswordValid) {
         throw new Error("Invalid email or password");
     }

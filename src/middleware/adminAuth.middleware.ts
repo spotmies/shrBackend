@@ -1,8 +1,9 @@
-import type { Request, Response, NextFunction } from "express";
+import { Request, Response, NextFunction } from "express";
+import dotenv from "dotenv";
+import { verifyToken, extractTokenFromHeader } from "../utils/jwt";
+
 // Ensure dotenv is loaded before accessing environment variables
-const dotenv = require("dotenv");
 dotenv.config({ path: "./src/config/.env" });
-const { verifyToken, extractTokenFromHeader } = require("../utils/jwt");
 
 interface AuthRequest extends Request {
     user?: {
@@ -19,7 +20,7 @@ interface AuthRequest extends Request {
  * @param next - Express next function
  */
 
-exports.adminAuthMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const adminAuthMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
         // Extract token from Authorization header
         const authHeader = req.headers.authorization;

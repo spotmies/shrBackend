@@ -18,6 +18,9 @@ router.delete("/:supervisorId/remove-project", adminAuthMiddleware, SupervisorCo
 // Get assigned projects count for supervisor - Must come before /:supervisorId route
 router.get("/:supervisorId/assigned-projects-count", SupervisorController.getAssignedProjectsCount);
 
+// Get all assigned projects for supervisor - Must come before /:supervisorId route
+router.get("/:supervisorId/assigned-projects", SupervisorController.getAssignedProjects);
+
 // Get supervisor by ID
 router.get("/:supervisorId", SupervisorController.getSupervisorById);
 

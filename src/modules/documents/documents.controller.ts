@@ -2,24 +2,6 @@ import type { Request, Response } from "express";
 const DocumentServices = require("./documents.services.ts");
 
 interface MulterRequest extends Request {
-    file?: {
-        buffer: Buffer;
-        originalname: string;
-        mimetype: string;
-    };
-    files?: {
-        [fieldname: string]: Array<{
-            fieldname: string;
-            buffer: Buffer;
-            originalname: string;
-            mimetype: string;
-        }>;
-    } | Array<{
-        fieldname: string;
-        buffer: Buffer;
-        originalname: string;
-        mimetype: string;
-    }>;
     user?: {
         email: string;
         role: string;
@@ -40,7 +22,7 @@ interface MulterRequest extends Request {
  *         multipart/form-data:
  *           schema:
  *             type: object
- *             required: ["documentType", "uploadedBy", "file"]
+ *             required: ["documentType", "file"]
  *             properties:
  *               documentType:
  *                 type: string
@@ -52,11 +34,6 @@ interface MulterRequest extends Request {
  *                 maxLength: 500
  *                 example: "Project agreement document"
  *                 description: Optional description of the document
- *               uploadedBy:
- *                 type: string
- *                 format: uuid
- *                 example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
- *                 description: Admin user ID who uploaded the document
  *               projectId:
  *                 type: string
  *                 format: uuid
@@ -91,9 +68,6 @@ interface MulterRequest extends Request {
  *                           type: string
  *                         description:
  *                           type: string
- *                         uploadedBy:
- *                           type: string
- *                           format: uuid
  *                         projectId:
  *                           type: string
  *                           format: uuid
@@ -115,9 +89,9 @@ exports.createDocument = async (req: MulterRequest, res: Response) => {
             if (Array.isArray(req.files)) {
                 file = req.files.length > 0 ? req.files[0] : undefined;
             } else {
-                file = (req.files['file'] && req.files['file'][0]) || 
-                       (req.files['fileData'] && req.files['fileData'][0]) || 
-                       undefined;
+                file = (req.files['file'] && req.files['file'][0]) ||
+                    (req.files['fileData'] && req.files['fileData'][0]) ||
+                    undefined;
             }
         }
 
@@ -182,9 +156,6 @@ exports.createDocument = async (req: MulterRequest, res: Response) => {
  *                           type: string
  *                         description:
  *                           type: string
- *                         uploadedBy:
- *                           type: string
- *                           format: uuid
  *                         projectId:
  *                           type: string
  *                           format: uuid
@@ -259,9 +230,6 @@ exports.getDocumentById = async (req: Request, res: Response) => {
  *                             type: string
  *                           description:
  *                             type: string
- *                           uploadedBy:
- *                             type: string
- *                             format: uuid
  *                           projectId:
  *                             type: string
  *                             format: uuid
@@ -276,11 +244,11 @@ exports.getDocumentById = async (req: Request, res: Response) => {
 exports.getAllDocuments = async (req: Request, res: Response) => {
     try {
         const filters: any = {};
-        
+
         if (req.query.documentType) {
             filters.documentType = req.query.documentType as string;
         }
-        
+
         if (req.query.projectId) {
             filters.projectId = req.query.projectId as string;
         }
@@ -358,8 +326,9 @@ exports.getDocumentsByType = async (req: Request, res: Response) => {
  * @swagger
  * /api/documents/project/{projectId}:
  *   get:
- *     summary: Get documents by project ID
+ *     summary: Get documents by project ID with project details
  *     tags: [Documents]
+ *     description: Returns project details along with all documents for the specified project, including fileName and documentType
  *     parameters:
  *       - in: path
  *         name: projectId
@@ -379,11 +348,69 @@ exports.getDocumentsByType = async (req: Request, res: Response) => {
  *                 - type: object
  *                   properties:
  *                     data:
- *                       type: array
- *                       items:
- *                         type: object
+ *                       type: object
+ *                       properties:
+ *                         project:
+ *                           type: object
+ *                           description: Project details
+ *                           properties:
+ *                             projectId:
+ *                               type: string
+ *                               format: uuid
+ *                               example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
+ *                             projectName:
+ *                               type: string
+ *                               example: "Luxury Villa Project"
+ *                             projectType:
+ *                               type: string
+ *                               enum: ["villa", "apartment", "building"]
+ *                               example: "villa"
+ *                             location:
+ *                               type: string
+ *                               example: "Downtown"
+ *                             totalBudget:
+ *                               type: number
+ *                               format: decimal
+ *                               example: 1000000
+ *                             startDate:
+ *                               type: string
+ *                               format: date
+ *                             expectedCompletion:
+ *                               type: string
+ *                               format: date
+ *                         documents:
+ *                           type: array
+ *                           description: Array of documents with fileName and documentType
+ *                           items:
+ *                             type: object
+ *                             properties:
+ *                               documentId:
+ *                                 type: string
+ *                                 format: uuid
+ *                               fileName:
+ *                                 type: string
+ *                                 example: "agreement.pdf"
+ *                                 description: Name of the document file
+ *                               documentType:
+ *                                 type: string
+ *                                 enum: ["Agreement", "plans", "permit", "others"]
+ *                                 example: "Agreement"
+ *                                 description: Type of the document
+ *                               fileType:
+ *                                 type: string
+ *                                 example: "application/pdf"
+ *                               description:
+ *                                 type: string
+ *                                 nullable: true
+ *                                 example: "Project agreement document"
+ *                               createdAt:
+ *                                 type: string
+ *                                 format: date-time
+ *                               updatedAt:
+ *                                 type: string
+ *                                 format: date-time
  *       400:
- *         description: Bad request
+ *         description: Bad request - Project not found or validation error
  *         content:
  *           application/json:
  *             schema:
@@ -496,9 +523,9 @@ exports.updateDocument = async (req: MulterRequest, res: Response) => {
             if (Array.isArray(req.files)) {
                 file = req.files.length > 0 ? req.files[0] : undefined;
             } else {
-                file = (req.files['file'] && req.files['file'][0]) || 
-                       (req.files['fileData'] && req.files['fileData'][0]) || 
-                       undefined;
+                file = (req.files['file'] && req.files['file'][0]) ||
+                    (req.files['fileData'] && req.files['fileData'][0]) ||
+                    undefined;
             }
         }
 
@@ -627,6 +654,71 @@ exports.downloadDocument = async (req: Request, res: Response) => {
 
         // Send file buffer
         return res.status(200).send(documentFile.fileData);
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/documents/counts/by-type:
+ *   get:
+ *     summary: Get total count of documents by type
+ *     tags: [Documents]
+ *     description: Returns the count of documents grouped by type (Agreement, plans, permit, others) and total count
+ *     responses:
+ *       200:
+ *         description: Document counts fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         Agreement:
+ *                           type: integer
+ *                           example: 15
+ *                           description: Count of Agreement documents
+ *                         plans:
+ *                           type: integer
+ *                           example: 8
+ *                           description: Count of plans documents
+ *                         permit:
+ *                           type: integer
+ *                           example: 12
+ *                           description: Count of permit documents
+ *                         others:
+ *                           type: integer
+ *                           example: 5
+ *                           description: Count of other documents
+ *                         total:
+ *                           type: integer
+ *                           example: 40
+ *                           description: Total count of all documents
+ *       400:
+ *         description: Bad request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+// GET - Get Document Counts by Type
+exports.getDocumentCountsByType = async (req: Request, res: Response) => {
+    try {
+        const counts = await DocumentServices.getDocumentCountsByType();
+
+        return res.status(200).json({
+            success: true,
+            message: "Document counts by type fetched successfully",
+            data: counts,
+        });
     } catch (error) {
         return res.status(400).json({
             success: false,

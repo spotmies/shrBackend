@@ -490,6 +490,94 @@ exports.getAssignedProjectsCount = async (req: Request, res: Response) => {
     }
 };
 
+/**
+ * @swagger
+ * /api/supervisor/{supervisorId}/assigned-projects:
+ *   get:
+ *     summary: Get all assigned projects for a specific supervisor
+ *     tags: [Supervisors]
+ *     parameters:
+ *       - in: path
+ *         name: supervisorId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The supervisor ID
+ *     responses:
+ *       200:
+ *         description: Assigned projects fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         supervisorId:
+ *                           type: string
+ *                           format: uuid
+ *                         supervisorName:
+ *                           type: string
+ *                         supervisorEmail:
+ *                           type: string
+ *                         assignedProjectsCount:
+ *                           type: integer
+ *                         projects:
+ *                           type: array
+ *                           items:
+ *                             type: object
+ *                             properties:
+ *                               projectId:
+ *                                 type: string
+ *                                 format: uuid
+ *                               projectName:
+ *                                 type: string
+ *                               projectType:
+ *                                 type: string
+ *                               location:
+ *                                 type: string
+ *                               initialStatus:
+ *                                 type: string
+ *                               startDate:
+ *                                 type: string
+ *                                 format: date
+ *                               expectedCompletion:
+ *                                 type: string
+ *                                 format: date
+ *                               totalBudget:
+ *                                 type: number
+ *                               user:
+ *                                 type: object
+ *                                 properties:
+ *                                   userName:
+ *                                     type: string
+ *                                   email:
+ *                                     type: string
+ *       400:
+ *         description: Bad request - Supervisor not found
+ */
+exports.getAssignedProjects = async (req: Request, res: Response) => {
+    try {
+        const { supervisorId } = req.params;
+        const result = await SupervisorServices.getAssignedProjects(supervisorId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Assigned projects fetched successfully",
+            data: result
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
 
 
 

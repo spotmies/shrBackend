@@ -1,4 +1,4 @@
-const AppDataSource = require("../../data-source/typeorm.ts");
+const { AppDataSource } = require("../../data-source/typeorm.ts");
 const MaterialEntity = require("./material.entity");
 
 const repository = AppDataSource.getRepository(MaterialEntity);

@@ -8,7 +8,7 @@ const {
     UpdateDateColumn
 } = require("typeorm");
 
-const ProjectEntity = require("../project/project.entity.ts");
+const { ProjectEntity } = require("../project/project.entity.ts");
 
 @Entity({ name: "expenses" })
 class ExpenseEntity {
@@ -33,6 +33,13 @@ class ExpenseEntity {
 
     @Column({ type: "text", nullable: true })
     description!: string | null;
+
+    @Column({
+        type: "enum",
+        enum: ["pending", "approved", "rejected"],
+        default: "pending"
+    })
+    status!: string;
 
     @CreateDateColumn({ name: "created_at" })
     createdAt!: Date;

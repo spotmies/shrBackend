@@ -1,8 +1,10 @@
-const AppDataSource = require("../../data-source/typeorm.ts");
-const UserEntity = require("./user.entity");
+const { AppDataSource } = require("../../data-source/typeorm.ts");
+const { UserEntity } = require("./user.entity");
+const { SupervisorEntity } = require("../supervisor/supervisor.entity");
 const bcrypt = require("bcrypt");
 
 const repository = AppDataSource.getRepository(UserEntity);
+const supervisorRepository = AppDataSource.getRepository(SupervisorEntity);
 
 
 exports.createUser = async (data: {
@@ -48,32 +50,32 @@ exports.createUser = async (data: {
     return userWithoutPassword;
 };
 
-exports.getUserById = async(userId : string)=>{
+exports.getUserById = async (userId: string) => {
 
-    if(!userId){
+    if (!userId) {
         throw new Error("User not exists");
     }
 
     const user = await repository.findOne({
-        where: {userId}
+        where: { userId }
     });
 
-    if(!user){
+    if (!user) {
         throw new Error("User not found");
     }
 
     return user;
 }
 
-exports.getAllUsers = async()=>{
+exports.getAllUsers = async () => {
     const users = await repository.find();
-    if(!users){
+    if (!users) {
         return []
     }
     return users
 }
 
-exports.updateUser = async(userId:String , updatedUserData:{
+exports.updateUser = async (userId: String, updatedUserData: {
     userName?: string;
     role?: string;
     email?: string;
@@ -83,13 +85,13 @@ exports.updateUser = async(userId:String , updatedUserData:{
     notes?: string | null;
     createdAt?: Date;
     updatedAt?: Date;
-})=>{
-    const user = await repository.findOne({where:{userId}})
+}) => {
+    const user = await repository.findOne({ where: { userId } })
 
-    if(!user){
+    if (!user) {
         throw new Error("User not found")
     }
-    
+
     // Only update fields that are provided
     if (updatedUserData.userName !== undefined) user.userName = updatedUserData.userName;
     if (updatedUserData.role !== undefined) user.role = updatedUserData.role;
@@ -97,7 +99,7 @@ exports.updateUser = async(userId:String , updatedUserData:{
     if (updatedUserData.contact !== undefined) user.contact = updatedUserData.contact;
     if (updatedUserData.estimatedInvestment !== undefined) user.estimatedInvestment = updatedUserData.estimatedInvestment;
     if (updatedUserData.notes !== undefined) user.notes = updatedUserData.notes;
-    
+
     // Handle password update (hash if provided)
     if (updatedUserData.password !== undefined) {
         if (updatedUserData.password === null || updatedUserData.password.trim() === "") {
@@ -106,7 +108,7 @@ exports.updateUser = async(userId:String , updatedUserData:{
             user.password = await bcrypt.hash(updatedUserData.password, 10);
         }
     }
-    
+
     user.updatedAt = new Date();
 
     const updatedUser = await repository.save(user);
@@ -115,13 +117,111 @@ exports.updateUser = async(userId:String , updatedUserData:{
     return userWithoutPassword;
 }
 
-exports.deleteUser = async(userId:String)=>{
-    const user = await repository.findOne({where:{userId}})
+exports.deleteUser = async (userId: String) => {
+    const user = await repository.findOne({ where: { userId } })
 
-    if(!user){
+    if (!user) {
         throw new Error("User not found")
     }
 
-   const deletedUser = await repository.remove(user);
-   return deletedUser;
+    const deletedUser = await repository.remove(user);
+    return deletedUser;
 }
+
+/**
+ * Approve supervisor for a user
+ * Updates the supervisor's approve field to "approve"
+ * @param userId - The user ID
+ */
+exports.approveSupervisor = async (userId: string) => {
+    // Find the user
+    const user = await repository.findOne({
+        where: { userId }
+    });
+
+    if (!user) {
+        throw new Error("User not found");
+    }
+
+    // Check if user has a supervisor assigned
+    if (!user.supervisorId) {
+        throw new Error("User does not have a supervisor assigned");
+    }
+
+    // Find the supervisor user (the user with role "supervisor" that is assigned to this user)
+    const supervisorUser = await repository.findOne({
+        where: { userId: user.supervisorId }
+    });
+
+    if (!supervisorUser) {
+        throw new Error("Supervisor user not found");
+    }
+
+    // Find the supervisor record by email (since supervisor and user share the same email)
+    const supervisor = await supervisorRepository.findOne({
+        where: { email: supervisorUser.email }
+    });
+
+    if (!supervisor) {
+        throw new Error("Supervisor record not found");
+    }
+
+    // Update supervisor's approve field
+    supervisor.approve = "approve";
+    supervisor.updatedAt = new Date();
+
+    const updatedSupervisor = await supervisorRepository.save(supervisor);
+
+    // Remove password from response
+    const { password, ...supervisorWithoutPassword } = updatedSupervisor;
+    return supervisorWithoutPassword;
+};
+
+/**
+ * Reject supervisor for a user
+ * Updates the supervisor's status field to "reject"
+ * @param userId - The user ID
+ */
+exports.rejectSupervisor = async (userId: string) => {
+    // Find the user
+    const user = await repository.findOne({
+        where: { userId }
+    });
+
+    if (!user) {
+        throw new Error("User not found");
+    }
+
+    // Check if user has a supervisor assigned
+    if (!user.supervisorId) {
+        throw new Error("User does not have a supervisor assigned");
+    }
+
+    // Find the supervisor user (the user with role "supervisor" that is assigned to this user)
+    const supervisorUser = await repository.findOne({
+        where: { userId: user.supervisorId }
+    });
+
+    if (!supervisorUser) {
+        throw new Error("Supervisor user not found");
+    }
+
+    // Find the supervisor record by email (since supervisor and user share the same email)
+    const supervisor = await supervisorRepository.findOne({
+        where: { email: supervisorUser.email }
+    });
+
+    if (!supervisor) {
+        throw new Error("Supervisor record not found");
+    }
+
+    // Update supervisor's status field to "reject"
+    supervisor.status = "reject";
+    supervisor.updatedAt = new Date();
+
+    const updatedSupervisor = await supervisorRepository.save(supervisor);
+
+    // Remove password from response
+    const { password, ...supervisorWithoutPassword } = updatedSupervisor;
+    return supervisorWithoutPassword;
+};

@@ -13,8 +13,8 @@ router.delete("/deletepayment/:paymentId", adminAuthMiddleware, paymentControlle
 router.get("/getpayment/:paymentId", paymentController.getPaymentById);
 router.get("/getallpayments", paymentController.getAllPayments);
 router.get("/budget-summary", paymentController.getBudgetSummary);
+router.get("/budget-summary/:projectId", paymentController.getBudgetSummaryByProject);
 
 module.exports = router;
-
 
 

@@ -8,7 +8,7 @@ const {
     UpdateDateColumn
 } = require("typeorm");
 
-const ProjectEntity = require("../project/project.entity.ts");
+const { ProjectEntity } = require("../project/project.entity.ts");
 
 @Entity({ name: "materials" })
 class MaterialEntity {
@@ -19,7 +19,7 @@ class MaterialEntity {
     projectId!: string;
 
     @ManyToOne(() => {
-        const ProjectEntity = require("../project/project.entity.ts");
+        const { ProjectEntity } = require("../project/project.entity.ts");
         return ProjectEntity;
     })
     @JoinColumn({ name: "projectId" })
