@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const DocumentController = require("./documents.controller.ts");
-const upload = require("../../config/multer.js");
-const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware.ts");
+const DocumentController = require("./documents.controller");
+const upload = require("../../config/multer.config").default;
+const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware");
 
 /**
  * @swagger
@@ -16,6 +16,9 @@ router.post("/", adminAuthMiddleware, upload.single("file"), DocumentController.
 
 // GET - Get All Documents (with optional filters: ?documentType=Agreement&projectId=uuid)
 router.get("/", DocumentController.getAllDocuments);
+
+// GET - Get Document Counts by Type
+router.get("/counts/by-type", DocumentController.getDocumentCountsByType);
 
 // GET - Get Documents by Type (Agreement, plans, permit, others)
 router.get("/type/:documentType", DocumentController.getDocumentsByType);
@@ -36,4 +39,5 @@ router.put("/:documentId", adminAuthMiddleware, upload.single("file"), DocumentC
 router.delete("/:documentId", adminAuthMiddleware, DocumentController.deleteDocument);
 
 module.exports = router;
+
 

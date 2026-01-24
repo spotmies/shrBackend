@@ -3,8 +3,8 @@ import type { Request, Response, NextFunction } from "express";
 const dotenv = require("dotenv");
 dotenv.config({ path: "./src/config/.env" });
 const { verifyToken, extractTokenFromHeader } = require("../utils/jwt");
-const AppDataSource = require("../data-source/typeorm.ts");
-const UserEntity = require("../modules/user/user.entity.ts");
+const { AppDataSource } = require("../data-source/typeorm.ts");
+const { UserEntity } = require("../modules/user/user.entity.ts");
 
 interface AuthRequest extends Request {
     user?: {

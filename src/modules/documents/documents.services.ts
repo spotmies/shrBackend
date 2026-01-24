@@ -1,17 +1,18 @@
-const AppDataSource = require("../../data-source/typeorm.ts");
-const DocumentEntity = require("./documents.entity");
+import { AppDataSource } from "../../data-source/typeorm";
+import { DocumentEntity } from "./documents.entity";
+import { ProjectEntity } from "../project/project.entity";
 
 const repository = AppDataSource.getRepository(DocumentEntity);
+const projectRepository = AppDataSource.getRepository(ProjectEntity);
 
 
-exports.createDocument = async (
+export const createDocument = async (
     data: {
         documentType: string;
         description?: string;
-        uploadedBy: string;
         projectId?: string;
-        createdAt: Date;
-        updatedAt: Date;
+        createdAt?: Date;
+        updatedAt?: Date;
     },
     file: {
         buffer: Buffer;
@@ -22,10 +23,6 @@ exports.createDocument = async (
     // Validate required fields
     if (!data.documentType) {
         throw new Error("Document type is required");
-    }
-
-    if (!data.uploadedBy) {
-        throw new Error("Uploaded by (admin) is required");
     }
 
     if (!file || !file.buffer) {
@@ -41,7 +38,6 @@ exports.createDocument = async (
     const newDocument = repository.create({
         documentType: data.documentType,
         description: data.description || null,
-        uploadedBy: data.uploadedBy,
         projectId: data.projectId || null,
         fileData: file.buffer,
         fileName: file.originalname,
@@ -56,7 +52,7 @@ exports.createDocument = async (
 };
 
 
-exports.getDocumentById = async (documentId: string) => {
+export const getDocumentById = async (documentId: string) => {
     if (!documentId) {
         throw new Error("Document ID is required");
     }
@@ -73,7 +69,7 @@ exports.getDocumentById = async (documentId: string) => {
 };
 
 
-exports.getAllDocuments = async (filters?: {
+export const getAllDocuments = async (filters?: {
     documentType?: string;
     projectId?: string;
 }) => {
@@ -105,7 +101,7 @@ exports.getAllDocuments = async (filters?: {
 };
 
 
-exports.getDocumentsByType = async (documentType: string) => {
+export const getDocumentsByType = async (documentType: string) => {
     const validTypes = ["Agreement", "plans", "permit", "others"];
     if (!validTypes.includes(documentType)) {
         throw new Error(`Invalid document type. Must be one of: ${validTypes.join(", ")}`);
@@ -126,11 +122,21 @@ exports.getDocumentsByType = async (documentType: string) => {
 };
 
 
-exports.getDocumentsByProject = async (projectId: string) => {
+export const getDocumentsByProject = async (projectId: string) => {
     if (!projectId) {
         throw new Error("Project ID is required");
     }
 
+    // Get the project details
+    const project = await projectRepository.findOne({
+        where: { projectId }
+    });
+
+    if (!project) {
+        throw new Error("Project not found");
+    }
+
+    // Get all documents for this project
     const documents = await repository.find({
         where: { projectId },
         order: {
@@ -138,15 +144,48 @@ exports.getDocumentsByProject = async (projectId: string) => {
         },
     });
 
-    if (!documents) {
-        return [];
+    if (!documents || documents.length === 0) {
+        return {
+            project: {
+                projectId: project.projectId,
+                projectName: project.projectName || "",
+                projectType: project.projectType || "",
+                location: project.location || "",
+                totalBudget: parseFloat(project.totalBudget.toString()) || 0,
+                startDate: project.startDate,
+                expectedCompletion: project.expectedCompletion,
+            },
+            documents: []
+        };
     }
 
-    return documents;
+    // Format documents with fileName and documentType name
+    const formattedDocuments = documents.map((doc: any) => ({
+        documentId: doc.documentId,
+        fileName: doc.fileName,
+        documentType: doc.documentType,
+        fileType: doc.fileType,
+        description: doc.description || null,
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt
+    }));
+
+    return {
+        project: {
+            projectId: project.projectId,
+            projectName: project.projectName || "",
+            projectType: project.projectType || "",
+            location: project.location || "",
+            totalBudget: parseFloat(project.totalBudget.toString()) || 0,
+            startDate: project.startDate,
+            expectedCompletion: project.expectedCompletion,
+        },
+        documents: formattedDocuments
+    };
 };
 
 
-exports.updateDocument = async (
+export const updateDocument = async (
     documentId: string,
     updateData: {
         documentType?: string;
@@ -201,7 +240,7 @@ exports.updateDocument = async (
 };
 
 
-exports.deleteDocument = async (documentId: string) => {
+export const deleteDocument = async (documentId: string) => {
     if (!documentId) {
         throw new Error("Document ID is required");
     }
@@ -218,7 +257,7 @@ exports.deleteDocument = async (documentId: string) => {
 };
 
 
-exports.getDocumentFile = async (documentId: string) => {
+export const getDocumentFile = async (documentId: string) => {
     if (!documentId) {
         throw new Error("Document ID is required");
     }
@@ -240,5 +279,40 @@ exports.getDocumentFile = async (documentId: string) => {
         documentType: document.documentType,
         createdAt: document.createdAt,
     };
+};
+
+/**
+ * Get total count of documents by type
+ * Returns counts for Agreement, plans, permit, and others
+ */
+export const getDocumentCountsByType = async () => {
+    // Get counts for each document type
+    const counts = await repository
+        .createQueryBuilder("document")
+        .select("document.documentType", "documentType")
+        .addSelect("COUNT(document.documentId)", "count")
+        .groupBy("document.documentType")
+        .getRawMany();
+
+    // Initialize all types with 0
+    const result: any = {
+        Agreement: 0,
+        plans: 0,
+        permit: 0,
+        others: 0,
+        total: 0
+    };
+
+    // Map the counts to result object
+    counts.forEach((item: any) => {
+        const type = item.documentType;
+        const count = parseInt(item.count, 10);
+        if (result.hasOwnProperty(type)) {
+            result[type] = count;
+            result.total += count;
+        }
+    });
+
+    return result;
 };
 

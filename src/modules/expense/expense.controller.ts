@@ -1,0 +1,598 @@
+import type { Request, Response } from "express";
+const ExpenseServices = require("./expense.services.ts");
+
+/**
+ * @swagger
+ * /api/expense:
+ *   post:
+ *     summary: Create a new expense (Admin and Supervisor only)
+ *     tags: [Expenses]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: ["projectId", "category", "amount", "date"]
+ *             properties:
+ *               projectId:
+ *                 type: string
+ *                 format: uuid
+ *               category:
+ *                 type: string
+ *                 enum: ["Labor", "Equipment", "Permits", "Materials"]
+ *                 example: "Labor"
+ *               amount:
+ *                 type: number
+ *                 format: decimal
+ *                 example: 5000.00
+ *               date:
+ *                 type: string
+ *                 format: date
+ *                 example: "2024-12-16"
+ *               description:
+ *                 type: string
+ *                 example: "Payment for construction workers"
+ *     responses:
+ *       201:
+ *         description: Expense created successfully
+ *       400:
+ *         description: Bad request - Validation error
+ *       401:
+ *         description: Unauthorized - Authentication required
+ *       403:
+ *         description: Forbidden - Admin or supervisor privileges required
+ */
+exports.createExpense = async (req: Request, res: Response) => {
+    try {
+        const expenseData = await ExpenseServices.createExpense(req.body);
+
+        return res.status(201).json({
+            success: true,
+            message: "Expense created successfully",
+            data: expenseData,
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/expense/{expenseId}:
+ *   get:
+ *     summary: Get an expense by ID
+ *     tags: [Expenses]
+ *     parameters:
+ *       - in: path
+ *         name: expenseId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Expense fetched successfully
+ *       400:
+ *         description: Bad request - Expense not found
+ */
+exports.getExpenseById = async (req: Request, res: Response) => {
+    try {
+        const { expenseId } = req.params;
+        const expense = await ExpenseServices.getExpenseById(expenseId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Expense fetched successfully",
+            data: expense
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/expense:
+ *   get:
+ *     summary: Get all expenses
+ *     tags: [Expenses]
+ *     responses:
+ *       200:
+ *         description: Expenses fetched successfully
+ */
+exports.getAllExpenses = async (req: Request, res: Response) => {
+    try {
+        const expenses = await ExpenseServices.getAllExpenses();
+
+        return res.status(200).json({
+            success: true,
+            message: "Expenses fetched successfully",
+            data: expenses
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/expense/project/{projectId}:
+ *   get:
+ *     summary: Get expenses by project ID
+ *     tags: [Expenses]
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Expenses fetched successfully
+ */
+exports.getExpensesByProject = async (req: Request, res: Response) => {
+    try {
+        const { projectId } = req.params;
+        const expenses = await ExpenseServices.getExpensesByProject(projectId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Expenses fetched successfully",
+            data: expenses
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/expense/category/{category}:
+ *   get:
+ *     summary: Get expenses by category
+ *     tags: [Expenses]
+ *     parameters:
+ *       - in: path
+ *         name: category
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: ["Labor", "Equipment", "Permits", "Materials"]
+ *     responses:
+ *       200:
+ *         description: Expenses fetched successfully
+ */
+exports.getExpensesByCategory = async (req: Request, res: Response) => {
+    try {
+        const { category } = req.params;
+        const expenses = await ExpenseServices.getExpensesByCategory(category);
+
+        return res.status(200).json({
+            success: true,
+            message: "Expenses fetched successfully",
+            data: expenses
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/expense/total-count:
+ *   get:
+ *     summary: Get total expense count
+ *     tags: [Expenses]
+ *     responses:
+ *       200:
+ *         description: Total expense count fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     totalCount:
+ *                       type: integer
+ */
+exports.getTotalExpenseCount = async (req: Request, res: Response) => {
+    try {
+        const result = await ExpenseServices.getTotalExpenseCount();
+
+        return res.status(200).json({
+            success: true,
+            message: "Total expense count fetched successfully",
+            data: result
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/expense/project/{projectId}/total-count:
+ *   get:
+ *     summary: Get total expense count by project
+ *     tags: [Expenses]
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Total expense count by project fetched successfully
+ */
+exports.getTotalExpenseCountByProject = async (req: Request, res: Response) => {
+    try {
+        const { projectId } = req.params;
+        const result = await ExpenseServices.getTotalExpenseCountByProject(projectId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Total expense count by project fetched successfully",
+            data: result
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/expense/project/{projectId}/total-amount:
+ *   get:
+ *     summary: Get total expense amount by project
+ *     tags: [Expenses]
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Total expense amount by project fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     projectId:
+ *                       type: string
+ *                     totalAmount:
+ *                       type: number
+ *                     count:
+ *                       type: integer
+ */
+exports.getTotalExpenseAmountByProject = async (req: Request, res: Response) => {
+    try {
+        const { projectId } = req.params;
+        const result = await ExpenseServices.getTotalExpenseAmountByProject(projectId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Total expense amount by project fetched successfully",
+            data: result
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/expense/{expenseId}:
+ *   put:
+ *     summary: Update an expense (Admin and Supervisor only)
+ *     tags: [Expenses]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: expenseId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               category:
+ *                 type: string
+ *                 enum: ["Labor", "Equipment", "Permits", "Materials"]
+ *               amount:
+ *                 type: number
+ *                 format: decimal
+ *               date:
+ *                 type: string
+ *                 format: date
+ *               description:
+ *                 type: string
+ *               projectId:
+ *                 type: string
+ *                 format: uuid
+ *     responses:
+ *       200:
+ *         description: Expense updated successfully
+ *       401:
+ *         description: Unauthorized - Authentication required
+ *       403:
+ *         description: Forbidden - Admin or supervisor privileges required
+ */
+exports.updateExpense = async (req: Request, res: Response) => {
+    try {
+        const { expenseId } = req.params;
+        const updatedExpense = await ExpenseServices.updateExpense(expenseId, req.body);
+
+        return res.status(200).json({
+            success: true,
+            message: "Expense updated successfully",
+            data: updatedExpense
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/expense/{expenseId}:
+ *   delete:
+ *     summary: Delete an expense (Admin and Supervisor only)
+ *     tags: [Expenses]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: expenseId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Expense deleted successfully
+ *       401:
+ *         description: Unauthorized - Authentication required
+ *       403:
+ *         description: Forbidden - Admin or supervisor privileges required
+ */
+exports.deleteExpense = async (req: Request, res: Response) => {
+    try {
+        const { expenseId } = req.params;
+        const result = await ExpenseServices.deleteExpense(expenseId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Expense deleted successfully",
+            data: result
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/expense/summary/all-projects:
+ *   get:
+ *     summary: Get expense summary for all projects
+ *     tags: [Expenses]
+ *     description: Returns expense details for all projects including project name, total expense, and expenses per month
+ *     responses:
+ *       200:
+ *         description: Expense summary fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           projectId:
+ *                             type: string
+ *                             format: uuid
+ *                             example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
+ *                           projectName:
+ *                             type: string
+ *                             example: "Luxury Villa Project"
+ *                           totalExpense:
+ *                             type: number
+ *                             format: decimal
+ *                             example: 150000.50
+ *                             description: Total expense for the project
+ *                           expensesPerMonth:
+ *                             type: array
+ *                             description: Array of monthly expenses
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *                                 month:
+ *                                   type: string
+ *                                   example: "2024-12"
+ *                                   description: Month in YYYY-MM format
+ *                                 totalExpense:
+ *                                   type: number
+ *                                   format: decimal
+ *                                   example: 50000.25
+ *                                   description: Total expense for that month
+ *       400:
+ *         description: Bad request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+exports.getExpenseSummaryAllProjects = async (req: Request, res: Response) => {
+    try {
+        const summary = await ExpenseServices.getExpenseSummaryAllProjects();
+
+        return res.status(200).json({
+            success: true,
+            message: "Expense summary for all projects fetched successfully",
+            data: summary
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/expense/summary/{projectId}:
+ *   get:
+ *     summary: Get expense summary for a specific project
+ *     tags: [Expenses]
+ *     description: Returns project details along with total expenses and expenses per month for the specified project
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The project ID to get expense summary for
+ *     responses:
+ *       200:
+ *         description: Expense summary fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         projectId:
+ *                           type: string
+ *                           format: uuid
+ *                         projectName:
+ *                           type: string
+ *                           example: "Luxury Villa Project"
+ *                         projectType:
+ *                           type: string
+ *                           example: "villa"
+ *                         location:
+ *                           type: string
+ *                           example: "Downtown"
+ *                         totalBudget:
+ *                           type: number
+ *                           format: decimal
+ *                           example: 1000000
+ *                         startDate:
+ *                           type: string
+ *                           format: date
+ *                         expectedCompletion:
+ *                           type: string
+ *                           format: date
+ *                         totalExpense:
+ *                           type: number
+ *                           format: decimal
+ *                           example: 150000.50
+ *                           description: Total expense for the project
+ *                         expensesPerMonth:
+ *                           type: array
+ *                           description: Array of monthly expenses
+ *                           items:
+ *                             type: object
+ *                             properties:
+ *                               month:
+ *                                 type: string
+ *                                 example: "2024-12"
+ *                                 description: Month in YYYY-MM format
+ *                               totalExpense:
+ *                                 type: number
+ *                                 format: decimal
+ *                                 example: 50000.25
+ *                                 description: Total expense for that month
+ *       400:
+ *         description: Bad request - Project not found or validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+exports.getExpenseSummaryByProject = async (req: Request, res: Response) => {
+    try {
+        const { projectId } = req.params;
+        const summary = await ExpenseServices.getExpenseSummaryByProject(projectId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Expense summary fetched successfully",
+            data: summary
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+

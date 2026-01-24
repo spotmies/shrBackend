@@ -77,7 +77,6 @@ const PaymentServices = require("./payments.services.ts");
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 
-
 //post
 exports.createPayment = async(req: Request,res: Response)=>{
     try{
@@ -398,7 +397,7 @@ exports.deletePayment = async(req:Request,res:Response)=>{
  *   get:
  *     summary: Get budget summary across all projects
  *     tags: [Payments]
- *     description: Calculates total budget, payment received, and payment pending from all projects
+ *     description: Calculates total budget, payment received, payment pending, and payment progress percentage from all projects
  *     responses:
  *       200:
  *         description: Budget summary fetched successfully
@@ -427,6 +426,10 @@ exports.deletePayment = async(req:Request,res:Response)=>{
  *                           format: decimal
  *                           example: 7060000
  *                           description: Total pending amount (Total Budget - Payment Received)
+ *                         progressPercentage:
+ *                           type: integer
+ *                           example: 16
+ *                           description: Payment progress percentage (Payment Received / Total Budget * 100)
  *       400:
  *         description: Bad request
  *         content:
@@ -450,4 +453,86 @@ exports.getBudgetSummary = async(req:Request,res:Response)=>{
         })
     }
 }
+
+/**
+ * @swagger
+ * /api/payment/budget-summary/{projectId}:
+ *   get:
+ *     summary: Get budget summary for a specific project
+ *     tags: [Payments]
+ *     description: Calculates total budget, paid amount, pending amount, and progress percentage for a specific project
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The project ID to get budget summary for
+ *     responses:
+ *       200:
+ *         description: Budget summary fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         projectId:
+ *                           type: string
+ *                           format: uuid
+ *                           example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
+ *                           description: The project ID
+ *                         projectName:
+ *                           type: string
+ *                           example: "Luxury Villa Project"
+ *                           description: The name of the project
+ *                         totalBudget:
+ *                           type: number
+ *                           format: decimal
+ *                           example: 1000000
+ *                           description: Total budget for the project
+ *                         paidAmount:
+ *                           type: number
+ *                           format: decimal
+ *                           example: 350000
+ *                           description: Total paid amount (completed payments)
+ *                         pendingAmount:
+ *                           type: number
+ *                           format: decimal
+ *                           example: 50000
+ *                           description: Total pending amount (pending payments)
+ *                         progressPercentage:
+ *                           type: integer
+ *                           example: 35
+ *                           description: Payment progress percentage (Paid Amount / Total Budget * 100)
+ *       400:
+ *         description: Bad request - Project not found or validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+//get budget summary by project
+exports.getBudgetSummaryByProject = async(req:Request,res:Response)=>{
+    try{
+        const projectId = req.params.projectId;
+        const budgetSummary = await PaymentServices.getBudgetSummaryByProject(projectId);
+        return res.status(200).json({
+            success:true,
+            message:"Budget summary fetched successfully",
+            data:budgetSummary,
+        })
+    }catch(error){
+        return res.status(400).json({
+            success:false,
+            message:error instanceof Error ? error.message: String(error),
+        })
+    }
+}
+
 

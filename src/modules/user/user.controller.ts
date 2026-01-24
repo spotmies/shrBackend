@@ -557,3 +557,137 @@ exports.getUsersWithoutSupervisor = async (req: Request, res: Response) => {
         });
     }
 };
+
+/**
+ * @swagger
+ * /api/user/{userId}/approve-supervisor:
+ *   post:
+ *     summary: Approve supervisor for a user (Customer only)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The user ID (must match authenticated customer's ID)
+ *     responses:
+ *       200:
+ *         description: Supervisor approved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *       400:
+ *         description: Bad request - User not found or supervisor not assigned
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Unauthorized - Customer authentication required
+ *       403:
+ *         description: Forbidden - Customer can only approve their own supervisor
+ */
+exports.approveSupervisor = async (req: Request, res: Response) => {
+    try {
+        const { userId } = req.params;
+        const authReq = req as any; // Type assertion for AuthRequest
+
+        // Ensure customer can only approve their own supervisor
+        if (authReq.user && authReq.user.userId !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: "Access denied. You can only approve your own supervisor."
+            });
+        }
+
+        const supervisor = await UserServices.approveSupervisor(userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Supervisor approved successfully",
+            data: supervisor
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/{userId}/reject-supervisor:
+ *   post:
+ *     summary: Reject supervisor for a user (Customer only)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The user ID (must match authenticated customer's ID)
+ *     responses:
+ *       200:
+ *         description: Supervisor rejected successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *       400:
+ *         description: Bad request - User not found or supervisor not assigned
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Unauthorized - Customer authentication required
+ *       403:
+ *         description: Forbidden - Customer can only reject their own supervisor
+ */
+exports.rejectSupervisor = async (req: Request, res: Response) => {
+    try {
+        const { userId } = req.params;
+        const authReq = req as any; // Type assertion for AuthRequest
+
+        // Ensure customer can only reject their own supervisor
+        if (authReq.user && authReq.user.userId !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: "Access denied. You can only reject your own supervisor."
+            });
+        }
+
+        const supervisor = await UserServices.rejectSupervisor(userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Supervisor rejected successfully",
+            data: supervisor
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};

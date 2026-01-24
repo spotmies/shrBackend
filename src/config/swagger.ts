@@ -18,6 +18,14 @@ const options = {
       },
     ],
     components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
+          description: "Enter your JWT token (you can get it from /api/auth/admin/login endpoint)"
+        }
+      },
       schemas: {
         User: {
           type: "object",

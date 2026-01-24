@@ -1,0 +1,456 @@
+import type { Request, Response } from "express";
+import * as DailyUpdatesServices from "./daily-updates.services";
+
+interface MulterRequest extends Omit<Request, "file" | "files"> {
+    file?: Express.Multer.File;
+    files?: {
+        [fieldname: string]: Express.Multer.File[];
+    } | Express.Multer.File[];
+}
+
+/**
+ * @swagger
+ * /api/daily-updates:
+ *   post:
+ *     summary: Create a new daily update (Supervisor only)
+ *     tags: [Daily Updates]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: ["constructionStage"]
+ *             properties:
+ *               constructionStage:
+ *                 type: string
+ *                 enum: ["Foundation", "Framing", "Plumbing & Electrical", "Interior Walls", "Painting", "Finishing"]
+ *                 example: "Foundation"
+ *               description:
+ *                 type: string
+ *                 example: "Completed foundation work for building A"
+ *               projectId:
+ *                 type: string
+ *                 format: uuid
+ *                 example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
+ *                 description: Optional project ID to link daily update to a project
+ *               rawMaterials:
+ *                 type: string
+ *                 format: json
+ *                 example: '[{"materialName":"Cement","quantity":50,"notes":"High quality cement"},{"materialName":"Steel","quantity":100}]'
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *                 description: Optional image file
+ *               video:
+ *                 type: string
+ *                 format: binary
+ *                 description: Optional video file
+ *     responses:
+ *       201:
+ *         description: Daily update created successfully
+ *       400:
+ *         description: Bad request - Validation error
+ */
+export const createDailyUpdate = async (req: MulterRequest, res: Response) => {
+    try {
+        // Handle file upload
+        let image: any = undefined;
+        let video: any = undefined;
+
+        if (req.files && !Array.isArray(req.files)) {
+            image = req.files['image']?.[0];
+            video = req.files['video']?.[0];
+        } else if (req.file) {
+            image = req.file;
+        }
+
+        // Parse rawMaterials if provided as JSON string
+        let rawMaterials = null;
+        if (req.body.rawMaterials) {
+            try {
+                rawMaterials = typeof req.body.rawMaterials === 'string'
+                    ? JSON.parse(req.body.rawMaterials)
+                    : req.body.rawMaterials;
+            } catch (error) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid rawMaterials JSON format"
+                });
+            }
+        }
+
+        const dailyUpdateData = await DailyUpdatesServices.createDailyUpdate(
+            {
+                constructionStage: req.body.constructionStage,
+                description: req.body.description || null,
+                projectId: req.body.projectId || null,
+                rawMaterials: rawMaterials,
+            },
+            image,
+            video
+        );
+
+        return res.status(201).json({
+            success: true,
+            message: "Daily update created successfully",
+            data: dailyUpdateData,
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/daily-updates/{dailyUpdateId}:
+ *   get:
+ *     summary: Get a daily update by ID
+ *     tags: [Daily Updates]
+ *     parameters:
+ *       - in: path
+ *         name: dailyUpdateId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Daily update fetched successfully
+ *       400:
+ *         description: Bad request - Daily update not found
+ */
+export const getDailyUpdateById = async (req: Request, res: Response) => {
+    try {
+        const dailyUpdateId = req.params.dailyUpdateId as string;
+        const dailyUpdate = await DailyUpdatesServices.getDailyUpdateById(dailyUpdateId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Daily update fetched successfully",
+            data: dailyUpdate,
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/daily-updates:
+ *   get:
+ *     summary: Get all daily updates
+ *     tags: [Daily Updates]
+ *     responses:
+ *       200:
+ *         description: Daily updates fetched successfully
+ */
+export const getAllDailyUpdates = async (req: Request, res: Response) => {
+    try {
+        const dailyUpdates = await DailyUpdatesServices.getAllDailyUpdates();
+
+        return res.status(200).json({
+            success: true,
+            message: "Daily updates fetched successfully",
+            data: dailyUpdates,
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/daily-updates/stage/{constructionStage}:
+ *   get:
+ *     summary: Get daily updates by construction stage
+ *     tags: [Daily Updates]
+ *     parameters:
+ *       - in: path
+ *         name: constructionStage
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: ["Foundation", "Framing", "Plumbing & Electrical", "Interior Walls", "Painting", "Finishing"]
+ *     responses:
+ *       200:
+ *         description: Daily updates fetched successfully
+ */
+export const getDailyUpdatesByStage = async (req: Request, res: Response) => {
+    try {
+        const constructionStage = req.params.constructionStage as string;
+        const dailyUpdates = await DailyUpdatesServices.getDailyUpdatesByStage(constructionStage);
+
+        return res.status(200).json({
+            success: true,
+            message: `Daily updates for stage '${constructionStage}' fetched successfully`,
+            data: dailyUpdates,
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/daily-updates/{dailyUpdateId}:
+ *   put:
+ *     summary: Update a daily update (Supervisor only)
+ *     tags: [Daily Updates]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: dailyUpdateId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               constructionStage:
+ *                 type: string
+ *                 enum: ["Foundation", "Framing", "Plumbing & Electrical", "Interior Walls", "Painting", "Finishing"]
+ *               description:
+ *                 type: string
+ *               projectId:
+ *                 type: string
+ *                 format: uuid
+ *                 nullable: true
+ *               rawMaterials:
+ *                 type: string
+ *                 format: json
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *               video:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Daily update updated successfully
+ *       400:
+ *         description: Bad request - Validation error
+ */
+export const updateDailyUpdate = async (req: MulterRequest, res: Response) => {
+    try {
+        const dailyUpdateId = req.params.dailyUpdateId;
+
+        // Prepare update data
+        const updateData: any = {};
+
+        if (req.body.constructionStage !== undefined && req.body.constructionStage !== null && req.body.constructionStage !== '') {
+            updateData.constructionStage = req.body.constructionStage;
+        }
+
+        if (req.body.description !== undefined) {
+            updateData.description = req.body.description || null;
+        }
+
+        if (req.body.projectId !== undefined) {
+            updateData.projectId = req.body.projectId || null;
+        }
+
+        // Parse rawMaterials if provided
+        if (req.body.rawMaterials !== undefined) {
+            try {
+                updateData.rawMaterials = typeof req.body.rawMaterials === 'string'
+                    ? JSON.parse(req.body.rawMaterials)
+                    : req.body.rawMaterials;
+            } catch (error) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid rawMaterials JSON format"
+                });
+            }
+        }
+
+        // Handle file upload
+        let image: any = undefined;
+        let video: any = undefined;
+
+        if (req.files && !Array.isArray(req.files)) {
+            image = req.files['image']?.[0];
+            video = req.files['video']?.[0];
+        } else if (req.file) {
+            image = req.file;
+        }
+
+        // Check if there's anything to update
+        const hasUpdates = Object.keys(updateData).length > 0 || image !== undefined || video !== undefined;
+
+        if (!hasUpdates) {
+            return res.status(400).json({
+                success: false,
+                message: "No fields provided to update"
+            });
+        }
+
+        const updatedDailyUpdate = await DailyUpdatesServices.updateDailyUpdate(
+            dailyUpdateId as string,
+            updateData,
+            image || undefined,
+            video || undefined
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: "Daily update updated successfully",
+            data: updatedDailyUpdate,
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/daily-updates/{dailyUpdateId}:
+ *   delete:
+ *     summary: Delete a daily update (Supervisor only)
+ *     tags: [Daily Updates]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: dailyUpdateId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Daily update deleted successfully
+ *       400:
+ *         description: Bad request - Daily update not found
+ */
+export const deleteDailyUpdate = async (req: Request, res: Response) => {
+    try {
+        const dailyUpdateId = req.params.dailyUpdateId as string;
+        const deletedData = await DailyUpdatesServices.deleteDailyUpdate(dailyUpdateId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Daily update deleted successfully",
+            data: deletedData,
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/daily-updates/{dailyUpdateId}/image:
+ *   get:
+ *     summary: Download daily update image
+ *     tags: [Daily Updates]
+ *     parameters:
+ *       - in: path
+ *         name: dailyUpdateId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Image downloaded successfully
+ *         content:
+ *           application/octet-stream:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       400:
+ *         description: Bad request - Image not found
+ */
+export const downloadImage = async (req: Request, res: Response) => {
+    try {
+        const dailyUpdateId = req.params.dailyUpdateId as string;
+        const imageFile = await DailyUpdatesServices.getDailyUpdateImage(dailyUpdateId);
+
+        if (imageFile.imageUrl) {
+            return res.redirect(imageFile.imageUrl);
+        }
+
+        return res.status(404).json({
+            success: false,
+            message: "No image URL found for this daily update"
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/daily-updates/{dailyUpdateId}/video:
+ *   get:
+ *     summary: Download daily update video
+ *     tags: [Daily Updates]
+ *     parameters:
+ *       - in: path
+ *         name: dailyUpdateId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Video downloaded successfully
+ *         content:
+ *           application/octet-stream:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       400:
+ *         description: Bad request - Video not found
+ */
+export const downloadVideo = async (req: Request, res: Response) => {
+    try {
+        const dailyUpdateId = req.params.dailyUpdateId as string;
+        const imageFile = await DailyUpdatesServices.getDailyUpdateImage(dailyUpdateId);
+
+        if (imageFile.videoUrl) {
+            return res.redirect(imageFile.videoUrl);
+        }
+
+        return res.status(404).json({
+            success: false,
+            message: "No video URL found for this daily update"
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
