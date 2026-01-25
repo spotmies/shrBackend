@@ -1,12 +1,9 @@
-const { AppDataSource } = require("../../data-source/typeorm.ts");
-const ExpenseEntity = require("./expense.entity.ts");
-const { ProjectEntity } = require("../project/project.entity.ts");
+﻿import prisma from "../../config/prisma.client";
+import { ExpenseCategory, ExpenseStatus, Prisma } from "@prisma/client";
 
-const repository = AppDataSource.getRepository(ExpenseEntity);
-const projectRepository = AppDataSource.getRepository(ProjectEntity);
 
 // Create a new expense
-exports.createExpense = async (data: {
+export const createExpense = async (data: {
     projectId: string;
     category: string;
     amount: number;
@@ -41,30 +38,31 @@ exports.createExpense = async (data: {
         throw new Error("Date is required");
     }
 
-    const newExpense = repository.create({
-        projectId: data.projectId,
-        category: data.category,
-        amount: data.amount,
-        date: data.date,
-        description: data.description || null,
-        status: data.status || "pending",
-        createdAt: new Date(),
-        updatedAt: new Date(),
+    const newExpense = await prisma.expense.create({
+        data: {
+            projectId: data.projectId,
+            category: data.category as ExpenseCategory,
+            amount: data.amount,
+            date: data.date,
+            description: data.description || null,
+            status: data.status as ExpenseStatus || ExpenseStatus.pending,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        }
     });
 
-    const savedExpense = await repository.save(newExpense);
-    return savedExpense;
+    return newExpense;
 };
 
 // Get expense by ID
-exports.getExpenseById = async (expenseId: string) => {
+export const getExpenseById = async (expenseId: string) => {
     if (!expenseId) {
         throw new Error("Expense ID is required");
     }
 
-    const expense = await repository.findOne({
+    const expense = await prisma.expense.findUnique({
         where: { expenseId },
-        relations: ["project"]
+        include: { project: true }
     });
 
     if (!expense) {
@@ -75,10 +73,10 @@ exports.getExpenseById = async (expenseId: string) => {
 };
 
 // Get all expenses
-exports.getAllExpenses = async () => {
-    const expenses = await repository.find({
-        relations: ["project"],
-        order: { createdAt: "DESC" }
+export const getAllExpenses = async () => {
+    const expenses = await prisma.expense.findMany({
+        include: { project: true },
+        orderBy: { createdAt: "desc" }
     });
 
     if (!expenses) {
@@ -88,31 +86,31 @@ exports.getAllExpenses = async () => {
 };
 
 // Get expenses by project ID
-exports.getExpensesByProject = async (projectId: string) => {
+export const getExpensesByProject = async (projectId: string) => {
     if (!projectId) {
         throw new Error("Project ID is required");
     }
 
-    const expenses = await repository.find({
+    const expenses = await prisma.expense.findMany({
         where: { projectId },
-        relations: ["project"],
-        order: { createdAt: "DESC" }
+        include: { project: true },
+        orderBy: { createdAt: "desc" }
     });
 
     return expenses;
 };
 
 // Get expenses by category
-exports.getExpensesByCategory = async (category: string) => {
+export const getExpensesByCategory = async (category: string) => {
     const validCategories = ["Labor", "Equipment", "Permits", "Materials"];
     if (!validCategories.includes(category)) {
         throw new Error(`Invalid category. Must be one of: ${validCategories.join(", ")}`);
     }
 
-    const expenses = await repository.find({
-        where: { category },
-        relations: ["project"],
-        order: { createdAt: "DESC" }
+    const expenses = await prisma.expense.findMany({
+        where: { category: category as ExpenseCategory },
+        include: { project: true },
+        orderBy: { createdAt: "desc" }
     });
 
     if (!expenses) {
@@ -123,20 +121,20 @@ exports.getExpensesByCategory = async (category: string) => {
 };
 
 // Get total expense count
-exports.getTotalExpenseCount = async () => {
-    const totalCount = await repository.count();
+export const getTotalExpenseCount = async () => {
+    const totalCount = await prisma.expense.count();
     return {
         totalCount: totalCount
     };
 };
 
 // Get total expense count by project
-exports.getTotalExpenseCountByProject = async (projectId: string) => {
+export const getTotalExpenseCountByProject = async (projectId: string) => {
     if (!projectId) {
         throw new Error("Project ID is required");
     }
 
-    const count = await repository.count({
+    const count = await prisma.expense.count({
         where: { projectId }
     });
 
@@ -147,12 +145,12 @@ exports.getTotalExpenseCountByProject = async (projectId: string) => {
 };
 
 // Get total expense amount by project
-exports.getTotalExpenseAmountByProject = async (projectId: string) => {
+export const getTotalExpenseAmountByProject = async (projectId: string) => {
     if (!projectId) {
         throw new Error("Project ID is required");
     }
 
-    const expenses = await repository.find({
+    const expenses = await prisma.expense.findMany({
         where: { projectId }
     });
 
@@ -168,7 +166,7 @@ exports.getTotalExpenseAmountByProject = async (projectId: string) => {
 };
 
 // Update expense
-exports.updateExpense = async (expenseId: string, updateData: {
+export const updateExpense = async (expenseId: string, updateData: {
     category?: string;
     amount?: number;
     date?: Date;
@@ -176,7 +174,7 @@ exports.updateExpense = async (expenseId: string, updateData: {
     projectId?: string;
     status?: string;
 }) => {
-    const expense = await repository.findOne({
+    const expense = await prisma.expense.findUnique({
         where: { expenseId }
     });
 
@@ -184,13 +182,17 @@ exports.updateExpense = async (expenseId: string, updateData: {
         throw new Error("Expense not found");
     }
 
+    const dataToUpdate: Prisma.ExpenseUpdateInput = {
+        updatedAt: new Date(),
+    };
+
     // Validate category if provided
     if (updateData.category !== undefined) {
         const validCategories = ["Labor", "Equipment", "Permits", "Materials"];
         if (!validCategories.includes(updateData.category)) {
             throw new Error(`Invalid category. Must be one of: ${validCategories.join(", ")}`);
         }
-        expense.category = updateData.category;
+        dataToUpdate.category = updateData.category as ExpenseCategory;
     }
 
     // Validate status if provided
@@ -199,37 +201,38 @@ exports.updateExpense = async (expenseId: string, updateData: {
         if (!validStatuses.includes(updateData.status)) {
             throw new Error(`Invalid status. Must be one of: ${validStatuses.join(", ")}`);
         }
-        expense.status = updateData.status;
+        dataToUpdate.status = updateData.status as ExpenseStatus;
     }
 
     if (updateData.amount !== undefined) {
         if (updateData.amount <= 0) {
             throw new Error("Amount must be greater than 0");
         }
-        expense.amount = updateData.amount;
+        dataToUpdate.amount = updateData.amount;
     }
 
     if (updateData.date !== undefined) {
-        expense.date = updateData.date;
+        dataToUpdate.date = updateData.date;
     }
 
     if (updateData.description !== undefined) {
-        expense.description = updateData.description;
+        dataToUpdate.description = updateData.description;
     }
 
     if (updateData.projectId !== undefined) {
-        expense.projectId = updateData.projectId;
+        dataToUpdate.project = { connect: { projectId: updateData.projectId } };
     }
 
-    expense.updatedAt = new Date();
-
-    const updatedExpense = await repository.save(expense);
+    const updatedExpense = await prisma.expense.update({
+        where: { expenseId },
+        data: dataToUpdate,
+    });
     return updatedExpense;
 };
 
 // Delete expense
-exports.deleteExpense = async (expenseId: string) => {
-    const expense = await repository.findOne({
+export const deleteExpense = async (expenseId: string) => {
+    const expense = await prisma.expense.findUnique({
         where: { expenseId }
     });
 
@@ -237,7 +240,9 @@ exports.deleteExpense = async (expenseId: string) => {
         throw new Error("Expense not found");
     }
 
-    await repository.remove(expense);
+    await prisma.expense.delete({
+        where: { expenseId }
+    });
     return { success: true, message: "Expense deleted successfully" };
 };
 
@@ -245,17 +250,17 @@ exports.deleteExpense = async (expenseId: string) => {
  * Get expense summary for all projects
  * Returns: projectId, projectName, total expense, and expenses per month for each project
  */
-exports.getExpenseSummaryAllProjects = async () => {
+export const getExpenseSummaryAllProjects = async () => {
     // Get all projects
-    const projects = await projectRepository.find();
+    const projects = await prisma.project.findMany();
 
     if (!projects || projects.length === 0) {
         return [];
     }
 
     // Get all expenses
-    const allExpenses = await repository.find({
-        order: { date: "ASC" }
+    const allExpenses = await prisma.expense.findMany({
+        orderBy: { date: "asc" }
     });
 
     // Create maps to store expenses by project
@@ -317,27 +322,27 @@ exports.getExpenseSummaryAllProjects = async () => {
  * Returns: project details, total expenses, and expenses per month
  * @param projectId - Project ID to get expense summary for
  */
-exports.getExpenseSummaryByProject = async (projectId: string) => {
+export const getExpenseSummaryByProject = async (projectId: string) => {
     if (!projectId) {
         throw new Error("Project ID is required");
     }
 
     // Get the project
-    const project = await projectRepository.findOne({ where: { projectId } });
+    const project = await prisma.project.findUnique({ where: { projectId } });
 
     if (!project) {
         throw new Error("Project not found");
     }
 
     // Get all expenses for this project
-    const expenses = await repository.find({
+    const expenses = await prisma.expense.findMany({
         where: { projectId },
-        order: { date: "ASC" }
+        orderBy: { date: "asc" }
     });
 
     // Calculate total expense
     const totalExpense = expenses.reduce((sum: number, expense: any) => {
-        return sum + parseFloat(expense.amount);
+        return sum + parseFloat(expense.amount.toString());
     }, 0);
 
     // Group expenses by month
@@ -350,7 +355,7 @@ exports.getExpenseSummaryByProject = async (projectId: string) => {
         if (!expensesPerMonth[monthKey]) {
             expensesPerMonth[monthKey] = 0;
         }
-        expensesPerMonth[monthKey] += parseFloat(expense.amount);
+        expensesPerMonth[monthKey] += parseFloat(expense.amount.toString());
     });
 
     // Convert to array format
@@ -366,11 +371,10 @@ exports.getExpenseSummaryByProject = async (projectId: string) => {
         projectName: project.projectName || "",
         projectType: project.projectType || "",
         location: project.location || "",
-        totalBudget: parseFloat(project.totalBudget) || 0,
+        totalBudget: parseFloat(project.totalBudget.toString()) || 0,
         startDate: project.startDate,
         expectedCompletion: project.expectedCompletion,
         totalExpense: Math.round(totalExpense * 100) / 100,
         expensesPerMonth: monthlyExpenses
     };
 };
-

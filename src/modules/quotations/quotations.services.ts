@@ -1,11 +1,8 @@
-
-const { AppDataSource } = require("../../data-source/typeorm.ts");
-const QuotationEntity = require("./quotations.entity");
+﻿import prisma from "../../config/prisma.client";
 import { fileUploadService } from "../../services/fileUpload.service";
+import { QuotationStatus, Prisma } from "@prisma/client";
 
-const repository = AppDataSource.getRepository(QuotationEntity);
-
-exports.createQuotation = async (data:
+export const createQuotation = async (data:
     {
         totalAmount: number,
         status: string,
@@ -37,46 +34,35 @@ exports.createQuotation = async (data:
     // Upload file if provided
     let fileUrl: string | null = null;
     if (file) {
-        // Upload to Supabase
-        // Using 'quotations' as the bucket name - make sure this bucket exists in Supabase
-        // or use a generic 'documents' bucket with a 'quotations' folder
         try {
             fileUrl = await fileUploadService.uploadFile({
-                file: file as any, // Cast to any because the service expects Express.Multer.File but here we have a custom object structure that matches
-                bucket: 'uploads', // Using a common bucket
+                file: file as any,
+                bucket: 'uploads',
                 folder: 'quotations'
             });
         } catch (error) {
             console.error("Error uploading file to Supabase:", error);
-            // Decide whether to fail appropriately or continue without file
             throw new Error("Failed to upload file to storage");
         }
     }
 
-    const newQuotation = repository.create({
+    const newQuotation = await prisma.quotation.create({
+        data: {
+            totalAmount: finalTotalAmount,
+            status: data.status as QuotationStatus,
+            lineItems: lineItems.length > 0 ? JSON.stringify(lineItems) : "[]",
+            date: data.date || null,
+            projectId: data.projectId,
+            fileData: null,
+            fileName: file ? file.originalname : null,
+            fileType: file ? file.mimetype : null,
+            fileUrl: fileUrl,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        }
+    });
 
-        totalAmount: finalTotalAmount,
-        status: data.status,
-        lineItems: lineItems.length > 0 ? lineItems : [],
-        date: data.date || null,
-        projectId: data.projectId,
-
-        // We encounter fileData (buffer) but we prefer fileUrl now.
-        // Keeping fileData as null to save space, or we could support both.
-        // Given the requirement, we store the URL.
-        fileData: null,
-        fileName: file ? file.originalname : null,
-        fileType: file ? file.mimetype : null,
-        fileUrl: fileUrl,
-
-        createdAt: new Date(),
-        updatedAt: new Date(),
-    })
-
-    const savedQuotation = await repository.save(newQuotation);
-
-    return savedQuotation;
-
+    return newQuotation;
 }
 
 // Helper function to format quotation ID (QU0001 format)
@@ -99,9 +85,9 @@ const formatQuotationResponse = (quotation: any, index?: number) => {
     return {
         id: formattedId,
         quotationId: quotation.quotationId,
-        projectName: quotation.projectId?.projectName || null,
-        customerName: quotation.projectId?.user?.userName || null,
-        customerEmail: quotation.projectId?.user?.email || null,
+        projectName: quotation.project?.projectName || null,
+        customerName: quotation.project?.user?.userName || null,
+        customerEmail: quotation.project?.user?.email || null,
         status: quotation.status,
         date: quotation.date ? new Date(quotation.date).toISOString().split('T')[0] : null,
         lineItems: quotation.lineItems || [],
@@ -114,15 +100,15 @@ const formatQuotationResponse = (quotation: any, index?: number) => {
     };
 };
 
-// // Get quotation by ID
-exports.getQuotationByQuotationId = async (quotationId: string) => {
+// Get quotation by ID
+export const getQuotationByQuotationId = async (quotationId: string) => {
 
     if (!quotationId) {
         throw new Error("Quotation not exists");
     }
-    const quotation = await repository.findOne({
+    const quotation = await prisma.quotation.findUnique({
         where: { quotationId },
-        relations: ["projectId", "projectId.user"]
+        include: { project: { include: { user: true } } }
     });
     if (!quotation) {
         throw new Error("Quotation not found");
@@ -130,11 +116,11 @@ exports.getQuotationByQuotationId = async (quotationId: string) => {
     return formatQuotationResponse(quotation);
 };
 
-// // Get all quotations
-exports.getAllTheQuotations = async () => {
-    const quotations = await repository.find({
-        relations: ["projectId", "projectId.user"],
-        order: { createdAt: "DESC" }
+// Get all quotations
+export const getAllTheQuotations = async () => {
+    const quotations = await prisma.quotation.findMany({
+        include: { project: { include: { user: true } } },
+        orderBy: { createdAt: "desc" }
     });
 
     if (!quotations) {
@@ -145,8 +131,8 @@ exports.getAllTheQuotations = async () => {
     return quotations.map((quotation: any, index: number) => formatQuotationResponse(quotation, index));
 };
 
-// // Update quotation
-exports.updateQuotation = async (quotationId: string, updateData: {
+// Update quotation
+export const updateQuotation = async (quotationId: string, updateData: {
     totalAmount?: number,
     status?: string,
     lineItems?: Array<{ description: string; amount: number }> | null,
@@ -158,41 +144,42 @@ exports.updateQuotation = async (quotationId: string, updateData: {
     originalname: string
     mimetype: string
 }) => {
-    const quotation = await repository.findOne({ where: { quotationId } });
+    const quotation = await prisma.quotation.findUnique({ where: { quotationId } });
 
     if (!quotation) {
         throw new Error("Quotation not found");
     }
 
-    // Update only the fields that are provided in updateData
+    const dataToUpdate: Prisma.QuotationUpdateInput = {
+        updatedAt: new Date(),
+    };
+
     if (updateData.totalAmount !== undefined) {
-        quotation.totalAmount = updateData.totalAmount;
+        dataToUpdate.totalAmount = updateData.totalAmount;
     }
 
     if (updateData.status !== undefined) {
-        quotation.status = updateData.status;
+        dataToUpdate.status = updateData.status as QuotationStatus;
     }
 
     if (updateData.lineItems !== undefined) {
-        quotation.lineItems = updateData.lineItems || [];
+        const lineItems = updateData.lineItems || [];
+        dataToUpdate.lineItems = JSON.stringify(lineItems);
 
         // Recalculate totalAmount from lineItems if lineItems are updated
         if (updateData.lineItems && updateData.lineItems.length > 0) {
             const calculatedTotal = updateData.lineItems.reduce((sum, item) => sum + (item.amount || 0), 0);
-            quotation.totalAmount = calculatedTotal;
+            dataToUpdate.totalAmount = calculatedTotal;
         }
     }
 
     if (updateData.date !== undefined) {
-        quotation.date = updateData.date;
+        dataToUpdate.date = updateData.date;
     }
 
     if (updateData.projectId !== undefined) {
-        quotation.projectId = updateData.projectId;
+        dataToUpdate.project = { connect: { projectId: updateData.projectId } };
     }
-
-    // Always update the updatedAt timestamp
-    quotation.updatedAt = new Date();
 
     // Update file fields only if file is provided
     if (file) {
@@ -203,30 +190,33 @@ exports.updateQuotation = async (quotationId: string, updateData: {
                 folder: 'quotations'
             });
 
-            quotation.fileData = null; // Clear buffer to save space
-            quotation.fileName = file.originalname;
-            quotation.fileType = file.mimetype;
-            quotation.fileUrl = fileUrl;
+            dataToUpdate.fileData = null; // Clear buffer to save space
+            dataToUpdate.fileName = file.originalname;
+            dataToUpdate.fileType = file.mimetype;
+            dataToUpdate.fileUrl = fileUrl;
         } catch (error) {
             console.error("Error uploading file to Supabase:", error);
             throw new Error("Failed to upload file to storage");
         }
     }
 
-    const updatedQuotation = await repository.save(quotation);
+    const updatedQuotation = await prisma.quotation.update({
+        where: { quotationId },
+        data: dataToUpdate,
+    });
 
     return updatedQuotation;
 };
 
-// // Delete quotation
-exports.deleteQuotation = async (quotationId: string) => {
-    const quotation = await repository.findOne({ where: { quotationId } });
+// Delete quotation
+export const deleteQuotation = async (quotationId: string) => {
+    const quotation = await prisma.quotation.findUnique({ where: { quotationId } });
 
     if (!quotation) {
         throw new Error("Quotation not found");
     }
 
-    await repository.remove(quotation);
+    await prisma.quotation.delete({ where: { quotationId } });
 
     return { success: true, message: "Quotation deleted successfully" };
 };
@@ -235,17 +225,17 @@ exports.deleteQuotation = async (quotationId: string) => {
  * Get quotations by status
  * @param status - The status to filter by (pending, approved, rejected, locked)
  */
-exports.getQuotationsByStatus = async (status: string) => {
+export const getQuotationsByStatus = async (status: string) => {
     const validStatuses = ['pending', 'approved', 'rejected', 'locked'];
 
     if (!validStatuses.includes(status)) {
         throw new Error(`Invalid status. Must be one of: ${validStatuses.join(', ')}`);
     }
 
-    const quotations = await repository.find({
-        where: { status },
-        relations: ["projectId", "projectId.user"],
-        order: { createdAt: "DESC" }
+    const quotations = await prisma.quotation.findMany({
+        where: { status: status as QuotationStatus },
+        include: { project: { include: { user: true } } },
+        orderBy: { createdAt: "desc" }
     });
 
     return quotations.map((quotation: any, index: number) => formatQuotationResponse(quotation, index));
@@ -254,11 +244,11 @@ exports.getQuotationsByStatus = async (status: string) => {
 /**
  * Get pending quotations (for users to review)
  */
-exports.getPendingQuotations = async () => {
-    const quotations = await repository.find({
-        where: { status: "pending" },
-        relations: ["projectId", "projectId.user"],
-        order: { createdAt: "DESC" }
+export const getPendingQuotations = async () => {
+    const quotations = await prisma.quotation.findMany({
+        where: { status: QuotationStatus.pending },
+        include: { project: { include: { user: true } } },
+        orderBy: { createdAt: "desc" }
     });
     return quotations.map((quotation: any, index: number) => formatQuotationResponse(quotation, index));
 };
@@ -267,15 +257,15 @@ exports.getPendingQuotations = async () => {
  * Get quotations by project ID
  * @param projectId - The project ID to filter by
  */
-exports.getQuotationsByProject = async (projectId: string) => {
+export const getQuotationsByProject = async (projectId: string) => {
     if (!projectId) {
         throw new Error("Project ID is required");
     }
 
-    const quotations = await repository.find({
+    const quotations = await prisma.quotation.findMany({
         where: { projectId },
-        relations: ["projectId", "projectId.user"],
-        order: { createdAt: "DESC" }
+        include: { project: { include: { user: true } } },
+        orderBy: { createdAt: "desc" }
     });
 
     return quotations.map((quotation: any, index: number) => formatQuotationResponse(quotation, index));
@@ -287,11 +277,11 @@ exports.getQuotationsByProject = async (projectId: string) => {
  * @param quotationId - The quotation ID to approve
  * @param userId - The user ID who is approving
  */
-exports.approveQuotation = async (quotationId: string, userId: string) => {
+export const approveQuotation = async (quotationId: string, userId: string) => {
     // Find the quotation
-    const quotation = await repository.findOne({
+    const quotation = await prisma.quotation.findUnique({
         where: { quotationId },
-        relations: ["projectId"]
+        include: { project: true }
     });
 
     if (!quotation) {
@@ -299,35 +289,38 @@ exports.approveQuotation = async (quotationId: string, userId: string) => {
     }
 
     // Check if quotation is already approved
-    if (quotation.status === "approved") {
+    if (quotation.status === QuotationStatus.approved) {
         throw new Error("Quotation is already approved");
     }
 
     // Check if quotation is already rejected
-    if (quotation.status === "rejected") {
+    if (quotation.status === QuotationStatus.rejected) {
         throw new Error("Cannot approve a rejected quotation");
     }
 
     // Check if quotation is already locked
-    if (quotation.status === "locked") {
+    if (quotation.status === QuotationStatus.locked) {
         throw new Error("Quotation is already locked");
     }
 
     // Only pending quotations can be approved
-    if (quotation.status !== "pending") {
+    if (quotation.status !== QuotationStatus.pending) {
         throw new Error("Only pending quotations can be approved");
     }
 
     // Approve the quotation
-    quotation.status = "approved";
-    quotation.updatedAt = new Date();
-
-    await repository.save(quotation);
+    await prisma.quotation.update({
+        where: { quotationId },
+        data: {
+            status: QuotationStatus.approved,
+            updatedAt: new Date(),
+        }
+    });
 
     // Return with relations and format response
-    const updatedQuotation = await repository.findOne({
+    const updatedQuotation = await prisma.quotation.findUnique({
         where: { quotationId },
-        relations: ["projectId", "projectId.user"]
+        include: { project: { include: { user: true } } }
     });
 
     if (!updatedQuotation) {
@@ -344,10 +337,10 @@ exports.approveQuotation = async (quotationId: string, userId: string) => {
  * @param quotationId - The quotation ID to reject
  * @param userId - The user ID who is rejecting
  */
-exports.rejectQuotation = async (quotationId: string, userId: string) => {
-    const quotation = await repository.findOne({
+export const rejectQuotation = async (quotationId: string, userId: string) => {
+    const quotation = await prisma.quotation.findUnique({
         where: { quotationId },
-        relations: ["projectId"]
+        include: { project: true }
     });
 
     if (!quotation) {
@@ -355,31 +348,34 @@ exports.rejectQuotation = async (quotationId: string, userId: string) => {
     }
 
     // Check if quotation is already approved
-    if (quotation.status === "approved") {
+    if (quotation.status === QuotationStatus.approved) {
         throw new Error("Cannot reject an approved quotation");
     }
 
     // Check if quotation is already rejected
-    if (quotation.status === "rejected") {
+    if (quotation.status === QuotationStatus.rejected) {
         throw new Error("Quotation is already rejected");
     }
 
     // Only pending quotations can be rejected
-    if (quotation.status !== "pending") {
+    if (quotation.status !== QuotationStatus.pending) {
         throw new Error("Only pending quotations can be rejected");
     }
 
     // Reject the quotation
     // This allows admin to resubmit the quotation later
-    quotation.status = "rejected";
-    quotation.updatedAt = new Date();
-
-    await repository.save(quotation);
+    await prisma.quotation.update({
+        where: { quotationId },
+        data: {
+            status: QuotationStatus.rejected,
+            updatedAt: new Date(),
+        }
+    });
 
     // Return with relations and format response
-    const updatedQuotation = await repository.findOne({
+    const updatedQuotation = await prisma.quotation.findUnique({
         where: { quotationId },
-        relations: ["projectId", "projectId.user"]
+        include: { project: { include: { user: true } } }
     });
 
     if (!updatedQuotation) {
@@ -388,4 +384,3 @@ exports.rejectQuotation = async (quotationId: string, userId: string) => {
 
     return formatQuotationResponse(updatedQuotation);
 };
-

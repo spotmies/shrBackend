@@ -1,10 +1,8 @@
-const { AppDataSource } = require("../../data-source/typeorm.ts");
-const { ProjectEntity } = require("./project.entity");
+﻿import prisma from "../../config/prisma.client";
+import { ProjectStatus, ProjectType, Prisma } from "@prisma/client";
 
-
-const repository = AppDataSource.getRepository(ProjectEntity);
-
-exports.createProject = async (data:
+// Create a new project
+export const createProject = async (data:
     {
         projectName: string,
         projectType: string,
@@ -21,38 +19,35 @@ exports.createProject = async (data:
         updatedAt: Date
     }) => {
 
-    const newProject = repository.create({
+    const newProject = await prisma.project.create({
+        data: {
+            projectName: data.projectName,
+            projectType: data.projectType as ProjectType,
+            location: data.location,
+            initialStatus: data.initialStatus as ProjectStatus,
+            startDate: data.startDate,
+            expectedCompletion: data.expectedCompletion,
+            totalBudget: data.totalBudget,
+            materialName: data.materialName,
+            quantity: data.quantity,
+            notes: data.notes,
+            userId: data.userId,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        }
+    });
 
-        projectName: data.projectName,
-        projectType: data.projectType,
-        location: data.location,
-        initialStatus: data.initialStatus,
-        startDate: data.startDate,
-        expectedCompletion: data.expectedCompletion,
-        totalBudget: data.totalBudget,
-        materialName: data.materialName,
-        quantity: data.quantity,
-        notes: data.notes,
-        userId: data.userId,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-    })
-
-    const savedProject = await repository.save(newProject);
-
-    return savedProject;
-
+    return newProject;
 }
 
 // Get project by ID
-exports.getProjectByProjectId = async (projectId: string) => {
+export const getProjectByProjectId = async (projectId: string) => {
 
     if (!projectId) {
         throw new Error("Project not exists");
     }
-    const project = await repository.findOne({
+    const project = await prisma.project.findUnique({
         where: { projectId },
-
     });
     if (!project) {
         throw new Error("Project not found");
@@ -61,8 +56,8 @@ exports.getProjectByProjectId = async (projectId: string) => {
 };
 
 // Get all projects
-exports.getAllTheProjects = async () => {
-    const projects = await repository.find();
+export const getAllTheProjects = async () => {
+    const projects = await prisma.project.findMany();
 
     if (!projects) {
         return [];
@@ -71,7 +66,7 @@ exports.getAllTheProjects = async () => {
 };
 
 // Update project
-exports.updateProject = async (projectId: string, updateData: {
+export const updateProject = async (projectId: string, updateData: {
     projectName?: string,
     projectType?: string,
     location?: string,
@@ -85,30 +80,47 @@ exports.updateProject = async (projectId: string, updateData: {
     userId?: string,
     updatedAt?: Date
 }) => {
-    const project = await repository.findOne({ where: { projectId } });
+    const project = await prisma.project.findUnique({ where: { projectId } });
 
     if (!project) {
         throw new Error("Project not found");
     }
 
-    Object.assign(project, updateData);
-    project.updatedAt = new Date();
+    const dataToUpdate: Prisma.ProjectUpdateInput = {
+        updatedAt: new Date(),
+    };
 
-    const updatedProject = await repository.save(project);
+    if (updateData.projectName !== undefined) dataToUpdate.projectName = updateData.projectName;
+    if (updateData.projectType !== undefined) dataToUpdate.projectType = updateData.projectType as ProjectType;
+    if (updateData.location !== undefined) dataToUpdate.location = updateData.location;
+    if (updateData.initialStatus !== undefined) dataToUpdate.initialStatus = updateData.initialStatus as ProjectStatus;
+    if (updateData.startDate !== undefined) dataToUpdate.startDate = updateData.startDate;
+    if (updateData.expectedCompletion !== undefined) dataToUpdate.expectedCompletion = updateData.expectedCompletion;
+    if (updateData.totalBudget !== undefined) dataToUpdate.totalBudget = updateData.totalBudget;
+    if (updateData.materialName !== undefined) dataToUpdate.materialName = updateData.materialName;
+    if (updateData.quantity !== undefined) dataToUpdate.quantity = updateData.quantity;
+    if (updateData.notes !== undefined) dataToUpdate.notes = updateData.notes;
+    if (updateData.userId !== undefined) dataToUpdate.user = { connect: { userId: updateData.userId } };
+
+    const updatedProject = await prisma.project.update({
+        where: { projectId },
+        data: dataToUpdate,
+    });
 
     return updatedProject;
 };
 
 // Delete project
-exports.deleteProject = async (projectId: string) => {
-    const project = await repository.findOne({ where: { projectId } });
+export const deleteProject = async (projectId: string) => {
+    const project = await prisma.project.findUnique({ where: { projectId } });
 
     if (!project) {
         throw new Error("Project not found");
     }
 
-    await repository.remove(project);
+    await prisma.project.delete({
+        where: { projectId },
+    });
 
     return { success: true, message: "Project deleted successfully" };
 };
-
