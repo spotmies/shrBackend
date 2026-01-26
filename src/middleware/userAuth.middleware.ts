@@ -1,10 +1,10 @@
 import type { Request, Response, NextFunction } from "express";
 // Ensure dotenv is loaded before accessing environment variables
-const dotenv = require("dotenv");
-dotenv.config({ path: "./src/config/.env" });
+import { config } from "dotenv";
+config({ path: "./src/config/.env" });
+import prisma from "../config/prisma.client";
 const { verifyToken, extractTokenFromHeader } = require("../utils/jwt");
-const { AppDataSource } = require("../data-source/typeorm.ts");
-const { UserEntity } = require("../modules/user/user.entity.ts");
+
 
 interface AuthRequest extends Request {
     user?: {
@@ -60,8 +60,7 @@ exports.userAuthMiddleware = async (req: AuthRequest, res: Response, next: NextF
         }
 
         // Get user from database to get userId
-        const userRepository = AppDataSource.getRepository(UserEntity);
-        const user = await userRepository.findOne({
+        const user = await prisma.user.findFirst({
             where: { email: decoded.email }
         });
 
@@ -87,4 +86,3 @@ exports.userAuthMiddleware = async (req: AuthRequest, res: Response, next: NextF
         });
     }
 };
-

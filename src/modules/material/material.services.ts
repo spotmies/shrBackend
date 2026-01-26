@@ -1,39 +1,37 @@
-const { AppDataSource } = require("../../data-source/typeorm.ts");
-const MaterialEntity = require("./material.entity");
-
-const repository = AppDataSource.getRepository(MaterialEntity);
+﻿import prisma from "../../config/prisma.client";
 
 // Create a new material
-exports.createMaterial = async (data: {
+export const createMaterial = async (data: {
     projectId: string;
     materialName: string;
     quantity: number;
     date: Date;
     notes?: string | null;
 }) => {
-    const newMaterial = repository.create({
-        projectId: data.projectId,
-        materialName: data.materialName,
-        quantity: data.quantity,
-        date: data.date,
-        notes: data.notes || null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+    const newMaterial = await prisma.material.create({
+        data: {
+            projectId: data.projectId,
+            materialName: data.materialName,
+            quantity: data.quantity,
+            date: data.date,
+            notes: data.notes || null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        }
     });
 
-    const savedMaterial = await repository.save(newMaterial);
-    return savedMaterial;
+    return newMaterial;
 };
 
 // Get material by ID
-exports.getMaterialById = async (materialId: string) => {
+export const getMaterialById = async (materialId: string) => {
     if (!materialId) {
         throw new Error("Material ID is required");
     }
 
-    const material = await repository.findOne({
+    const material = await prisma.material.findUnique({
         where: { materialId },
-        relations: ["project"]
+        include: { project: true }
     });
 
     if (!material) {
@@ -44,10 +42,10 @@ exports.getMaterialById = async (materialId: string) => {
 };
 
 // Get all materials
-exports.getAllMaterials = async () => {
-    const materials = await repository.find({
-        relations: ["project"],
-        order: { createdAt: "DESC" }
+export const getAllMaterials = async () => {
+    const materials = await prisma.material.findMany({
+        include: { project: true },
+        orderBy: { createdAt: "desc" }
     });
 
     if (!materials) {
@@ -57,35 +55,35 @@ exports.getAllMaterials = async () => {
 };
 
 // Get materials by project ID
-exports.getMaterialsByProject = async (projectId: string) => {
+export const getMaterialsByProject = async (projectId: string) => {
     if (!projectId) {
         throw new Error("Project ID is required");
     }
 
-    const materials = await repository.find({
+    const materials = await prisma.material.findMany({
         where: { projectId },
-        relations: ["project"],
-        order: { createdAt: "DESC" }
+        include: { project: true },
+        orderBy: { createdAt: "desc" }
     });
 
     return materials;
 };
 
 // Get total material count
-exports.getTotalMaterialCount = async () => {
-    const totalCount = await repository.count();
+export const getTotalMaterialCount = async () => {
+    const totalCount = await prisma.material.count();
     return {
         totalCount: totalCount
     };
 };
 
 // Get total material count by project
-exports.getTotalMaterialCountByProject = async (projectId: string) => {
+export const getTotalMaterialCountByProject = async (projectId: string) => {
     if (!projectId) {
         throw new Error("Project ID is required");
     }
 
-    const count = await repository.count({
+    const count = await prisma.material.count({
         where: { projectId }
     });
 
@@ -96,14 +94,14 @@ exports.getTotalMaterialCountByProject = async (projectId: string) => {
 };
 
 // Update material
-exports.updateMaterial = async (materialId: string, updateData: {
+export const updateMaterial = async (materialId: string, updateData: {
     materialName?: string;
     quantity?: number;
     date?: Date;
     notes?: string | null;
     projectId?: string;
 }) => {
-    const material = await repository.findOne({
+    const material = await prisma.material.findUnique({
         where: { materialId }
     });
 
@@ -111,35 +109,40 @@ exports.updateMaterial = async (materialId: string, updateData: {
         throw new Error("Material not found");
     }
 
+    const dataToUpdate: any = {
+        updatedAt: new Date(),
+    };
+
     if (updateData.materialName !== undefined) {
-        material.materialName = updateData.materialName;
+        dataToUpdate.materialName = updateData.materialName;
     }
 
     if (updateData.quantity !== undefined) {
-        material.quantity = updateData.quantity;
+        dataToUpdate.quantity = updateData.quantity;
     }
 
     if (updateData.date !== undefined) {
-        material.date = updateData.date;
+        dataToUpdate.date = updateData.date;
     }
 
     if (updateData.notes !== undefined) {
-        material.notes = updateData.notes;
+        dataToUpdate.notes = updateData.notes;
     }
 
     if (updateData.projectId !== undefined) {
-        material.projectId = updateData.projectId;
+        dataToUpdate.projectId = updateData.projectId;
     }
 
-    material.updatedAt = new Date();
-
-    const updatedMaterial = await repository.save(material);
+    const updatedMaterial = await prisma.material.update({
+        where: { materialId },
+        data: dataToUpdate,
+    });
     return updatedMaterial;
 };
 
 // Delete material
-exports.deleteMaterial = async (materialId: string) => {
-    const material = await repository.findOne({
+export const deleteMaterial = async (materialId: string) => {
+    const material = await prisma.material.findUnique({
         where: { materialId }
     });
 
@@ -147,9 +150,8 @@ exports.deleteMaterial = async (materialId: string) => {
         throw new Error("Material not found");
     }
 
-    await repository.remove(material);
+    await prisma.material.delete({
+        where: { materialId }
+    });
     return { success: true, message: "Material deleted successfully" };
 };
-
-
-

@@ -1,13 +1,9 @@
-const { AppDataSource } = require("../../data-source/typeorm.ts");
-const { UserEntity } = require("./user.entity");
-const { SupervisorEntity } = require("../supervisor/supervisor.entity");
-const bcrypt = require("bcrypt");
+﻿import prisma from "../../config/prisma.client";
+import * as bcrypt from "bcrypt";
+import { UserRole, SupervisorStatus, Prisma } from "@prisma/client";
 
-const repository = AppDataSource.getRepository(UserEntity);
-const supervisorRepository = AppDataSource.getRepository(SupervisorEntity);
-
-
-exports.createUser = async (data: {
+// Create a new user
+export const createUser = async (data: {
     userName: string;
     role: string;
     email: string;
@@ -18,7 +14,7 @@ exports.createUser = async (data: {
     createdAt: Date;
     updatedAt: Date;
 }) => {
-    const existingUser = await repository.findOne({
+    const existingUser = await prisma.user.findFirst({
         where: { email: data.email } // or data.userName, adjust as needed
     });
 
@@ -32,31 +28,32 @@ exports.createUser = async (data: {
         hashedPassword = await bcrypt.hash(data.password, 10);
     }
 
-    const newUser = repository.create({
-        userName: data.userName,
-        role: data.role,
-        email: data.email,
-        password: hashedPassword,
-        contact: data.contact,
-        estimatedInvestment: data.estimatedInvestment || null,
-        notes: data.notes || null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+    const newUser = await prisma.user.create({
+        data: {
+            userName: data.userName,
+            role: data.role as UserRole,
+            email: data.email,
+            password: hashedPassword,
+            contact: data.contact,
+            estimatedInvestment: data.estimatedInvestment || null,
+            notes: data.notes || null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        }
     });
 
-    const savedUser = await repository.save(newUser);
     // Remove password from response
-    const { password, ...userWithoutPassword } = savedUser;
+    const { password: _, ...userWithoutPassword } = newUser;
     return userWithoutPassword;
 };
 
-exports.getUserById = async (userId: string) => {
+export const getUserById = async (userId: string) => {
 
     if (!userId) {
         throw new Error("User not exists");
     }
 
-    const user = await repository.findOne({
+    const user = await prisma.user.findUnique({
         where: { userId }
     });
 
@@ -67,15 +64,15 @@ exports.getUserById = async (userId: string) => {
     return user;
 }
 
-exports.getAllUsers = async () => {
-    const users = await repository.find();
+export const getAllUsers = async () => {
+    const users = await prisma.user.findMany();
     if (!users) {
         return []
     }
     return users
 }
 
-exports.updateUser = async (userId: String, updatedUserData: {
+export const updateUser = async (userId: string, updatedUserData: {
     userName?: string;
     role?: string;
     email?: string;
@@ -86,45 +83,51 @@ exports.updateUser = async (userId: String, updatedUserData: {
     createdAt?: Date;
     updatedAt?: Date;
 }) => {
-    const user = await repository.findOne({ where: { userId } })
+    const user = await prisma.user.findUnique({ where: { userId } })
 
     if (!user) {
         throw new Error("User not found")
     }
 
+    const dataToUpdate: Prisma.UserUpdateInput = {
+        updatedAt: new Date(),
+    };
+
     // Only update fields that are provided
-    if (updatedUserData.userName !== undefined) user.userName = updatedUserData.userName;
-    if (updatedUserData.role !== undefined) user.role = updatedUserData.role;
-    if (updatedUserData.email !== undefined) user.email = updatedUserData.email;
-    if (updatedUserData.contact !== undefined) user.contact = updatedUserData.contact;
-    if (updatedUserData.estimatedInvestment !== undefined) user.estimatedInvestment = updatedUserData.estimatedInvestment;
-    if (updatedUserData.notes !== undefined) user.notes = updatedUserData.notes;
+    if (updatedUserData.userName !== undefined) dataToUpdate.userName = updatedUserData.userName;
+    if (updatedUserData.role !== undefined) dataToUpdate.role = updatedUserData.role as UserRole;
+    if (updatedUserData.email !== undefined) dataToUpdate.email = updatedUserData.email;
+    if (updatedUserData.contact !== undefined) dataToUpdate.contact = updatedUserData.contact;
+    if (updatedUserData.estimatedInvestment !== undefined) dataToUpdate.estimatedInvestment = updatedUserData.estimatedInvestment;
+    if (updatedUserData.notes !== undefined) dataToUpdate.notes = updatedUserData.notes;
 
     // Handle password update (hash if provided)
     if (updatedUserData.password !== undefined) {
         if (updatedUserData.password === null || updatedUserData.password.trim() === "") {
-            user.password = null;
+            dataToUpdate.password = null;
         } else {
-            user.password = await bcrypt.hash(updatedUserData.password, 10);
+            dataToUpdate.password = await bcrypt.hash(updatedUserData.password, 10);
         }
     }
 
-    user.updatedAt = new Date();
+    const updatedUser = await prisma.user.update({
+        where: { userId },
+        data: dataToUpdate,
+    });
 
-    const updatedUser = await repository.save(user);
     // Remove password from response
-    const { password, ...userWithoutPassword } = updatedUser;
+    const { password: _, ...userWithoutPassword } = updatedUser;
     return userWithoutPassword;
 }
 
-exports.deleteUser = async (userId: String) => {
-    const user = await repository.findOne({ where: { userId } })
+export const deleteUser = async (userId: string) => {
+    const user = await prisma.user.findUnique({ where: { userId } })
 
     if (!user) {
         throw new Error("User not found")
     }
 
-    const deletedUser = await repository.remove(user);
+    const deletedUser = await prisma.user.delete({ where: { userId } });
     return deletedUser;
 }
 
@@ -133,9 +136,9 @@ exports.deleteUser = async (userId: String) => {
  * Updates the supervisor's approve field to "approve"
  * @param userId - The user ID
  */
-exports.approveSupervisor = async (userId: string) => {
+export const approveSupervisor = async (userId: string) => {
     // Find the user
-    const user = await repository.findOne({
+    const user = await prisma.user.findUnique({
         where: { userId }
     });
 
@@ -149,7 +152,7 @@ exports.approveSupervisor = async (userId: string) => {
     }
 
     // Find the supervisor user (the user with role "supervisor" that is assigned to this user)
-    const supervisorUser = await repository.findOne({
+    const supervisorUser = await prisma.user.findUnique({
         where: { userId: user.supervisorId }
     });
 
@@ -158,7 +161,7 @@ exports.approveSupervisor = async (userId: string) => {
     }
 
     // Find the supervisor record by email (since supervisor and user share the same email)
-    const supervisor = await supervisorRepository.findOne({
+    const supervisor = await prisma.supervisor.findUnique({
         where: { email: supervisorUser.email }
     });
 
@@ -167,13 +170,16 @@ exports.approveSupervisor = async (userId: string) => {
     }
 
     // Update supervisor's approve field
-    supervisor.approve = "approve";
-    supervisor.updatedAt = new Date();
-
-    const updatedSupervisor = await supervisorRepository.save(supervisor);
+    const updatedSupervisor = await prisma.supervisor.update({
+        where: { supervisorId: supervisor.supervisorId },
+        data: {
+            approve: "approve",
+            updatedAt: new Date(),
+        }
+    });
 
     // Remove password from response
-    const { password, ...supervisorWithoutPassword } = updatedSupervisor;
+    const { password: _, ...supervisorWithoutPassword } = updatedSupervisor;
     return supervisorWithoutPassword;
 };
 
@@ -182,9 +188,9 @@ exports.approveSupervisor = async (userId: string) => {
  * Updates the supervisor's status field to "reject"
  * @param userId - The user ID
  */
-exports.rejectSupervisor = async (userId: string) => {
+export const rejectSupervisor = async (userId: string) => {
     // Find the user
-    const user = await repository.findOne({
+    const user = await prisma.user.findUnique({
         where: { userId }
     });
 
@@ -198,7 +204,7 @@ exports.rejectSupervisor = async (userId: string) => {
     }
 
     // Find the supervisor user (the user with role "supervisor" that is assigned to this user)
-    const supervisorUser = await repository.findOne({
+    const supervisorUser = await prisma.user.findUnique({
         where: { userId: user.supervisorId }
     });
 
@@ -207,7 +213,7 @@ exports.rejectSupervisor = async (userId: string) => {
     }
 
     // Find the supervisor record by email (since supervisor and user share the same email)
-    const supervisor = await supervisorRepository.findOne({
+    const supervisor = await prisma.supervisor.findUnique({
         where: { email: supervisorUser.email }
     });
 
@@ -216,12 +222,15 @@ exports.rejectSupervisor = async (userId: string) => {
     }
 
     // Update supervisor's status field to "reject"
-    supervisor.status = "reject";
-    supervisor.updatedAt = new Date();
-
-    const updatedSupervisor = await supervisorRepository.save(supervisor);
+    const updatedSupervisor = await prisma.supervisor.update({
+        where: { supervisorId: supervisor.supervisorId },
+        data: {
+            status: SupervisorStatus.reject,
+            updatedAt: new Date(),
+        }
+    });
 
     // Remove password from response
-    const { password, ...supervisorWithoutPassword } = updatedSupervisor;
+    const { password: _, ...supervisorWithoutPassword } = updatedSupervisor;
     return supervisorWithoutPassword;
 };

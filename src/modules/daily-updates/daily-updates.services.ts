@@ -1,11 +1,6 @@
-import { AppDataSource } from "../../data-source/typeorm";
-import { DailyUpdates } from "./daily-updates.entity";
+﻿import prisma from "../../config/prisma.client";
 import { fileUploadService } from "../../services/fileUpload.service";
-
-import { ProjectEntity } from "../project/project.entity";
-
-const repository = AppDataSource.getRepository(DailyUpdates);
-const projectRepository = AppDataSource.getRepository(ProjectEntity);
+import { ConstructionStage, DailyUpdateStatus, Prisma } from "@prisma/client";
 
 // Create a new daily update
 export const createDailyUpdate = async (
@@ -58,7 +53,7 @@ export const createDailyUpdate = async (
     let validProjectId: string | null = null;
     if (data.projectId && data.projectId.trim() !== "") {
         // Check if project exists
-        const project = await projectRepository.findOne({ where: { projectId: data.projectId } });
+        const project = await prisma.project.findUnique({ where: { projectId: data.projectId } });
         if (!project) {
             throw new Error(`Project with ID ${data.projectId} not found`);
         }
@@ -95,22 +90,29 @@ export const createDailyUpdate = async (
         }
     }
 
-    const newDailyUpdate = repository.create({
-        constructionStage: data.constructionStage,
-        description: data.description || null,
-        projectId: validProjectId,
-        rawMaterials: data.rawMaterials || [],
-        status: data.status || "pending",
-        imageUrl: imageUrl,
-        imageName: image ? image.originalname : null,
-        imageType: image ? image.mimetype : null,
-        videoUrl: videoUrl,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+    // Maps string to enum
+    const stageEnum = data.constructionStage === "Plumbing & Electrical" ? ConstructionStage.Plumbing___Electrical :
+        data.constructionStage === "Interior Walls" ? ConstructionStage.Interior_Walls :
+            data.constructionStage as ConstructionStage;
+
+    const statusEnum = data.status as DailyUpdateStatus || DailyUpdateStatus.pending;
+
+
+    const newDailyUpdate = await prisma.dailyUpdate.create({
+        data: {
+            constructionStage: stageEnum,
+            description: data.description || null,
+            projectId: validProjectId,
+            rawMaterials: data.rawMaterials ? JSON.stringify(data.rawMaterials) : "[]", // Store as JSON string if your DB expects it or rely on Prisma Json type
+            status: statusEnum,
+            imageUrl: imageUrl,
+            imageName: image ? image.originalname : null,
+            imageType: image ? image.mimetype : null,
+            videoUrl: videoUrl,
+        }
     });
 
-    const savedDailyUpdate = await repository.save(newDailyUpdate);
-    return savedDailyUpdate;
+    return newDailyUpdate;
 };
 
 // Get daily update by ID
@@ -119,7 +121,7 @@ export const getDailyUpdateById = async (dailyUpdateId: string) => {
         throw new Error("Daily update ID is required");
     }
 
-    const dailyUpdate = await repository.findOne({
+    const dailyUpdate = await prisma.dailyUpdate.findUnique({
         where: { dailyUpdateId },
     });
 
@@ -132,8 +134,8 @@ export const getDailyUpdateById = async (dailyUpdateId: string) => {
 
 // Get all daily updates
 export const getAllDailyUpdates = async () => {
-    const dailyUpdates = await repository.find({
-        order: { createdAt: "DESC" },
+    const dailyUpdates = await prisma.dailyUpdate.findMany({
+        orderBy: { createdAt: "desc" },
     });
 
     if (!dailyUpdates) {
@@ -149,9 +151,14 @@ export const getDailyUpdatesByStage = async (constructionStage: string) => {
         throw new Error(`Invalid construction stage. Must be one of: ${validStages.join(", ")}`);
     }
 
-    const dailyUpdates = await repository.find({
-        where: { constructionStage },
-        order: { createdAt: "DESC" },
+    // Map string to enum
+    const stageEnum = constructionStage === "Plumbing & Electrical" ? ConstructionStage.Plumbing___Electrical :
+        constructionStage === "Interior Walls" ? ConstructionStage.Interior_Walls :
+            constructionStage as ConstructionStage;
+
+    const dailyUpdates = await prisma.dailyUpdate.findMany({
+        where: { constructionStage: stageEnum },
+        orderBy: { createdAt: "desc" },
     });
 
     if (!dailyUpdates) {
@@ -178,7 +185,7 @@ export const updateDailyUpdate = async (
     image?: any,
     video?: any
 ) => {
-    const dailyUpdate = await repository.findOne({
+    const dailyUpdate = await prisma.dailyUpdate.findUnique({
         where: { dailyUpdateId },
     });
 
@@ -186,13 +193,22 @@ export const updateDailyUpdate = async (
         throw new Error("Daily update not found");
     }
 
+    const dataToUpdate: Prisma.DailyUpdateUpdateInput = {
+        updatedAt: new Date(),
+    };
+
     // Validate and update construction stage if provided
     if (updateData.constructionStage !== undefined) {
         const validStages = ["Foundation", "Framing", "Plumbing & Electrical", "Interior Walls", "Painting", "Finishing"];
         if (!validStages.includes(updateData.constructionStage)) {
             throw new Error(`Invalid construction stage. Must be one of: ${validStages.join(", ")}`);
         }
-        dailyUpdate.constructionStage = updateData.constructionStage;
+
+        const stageEnum = updateData.constructionStage === "Plumbing & Electrical" ? ConstructionStage.Plumbing___Electrical :
+            updateData.constructionStage === "Interior Walls" ? ConstructionStage.Interior_Walls :
+                updateData.constructionStage as ConstructionStage;
+
+        dataToUpdate.constructionStage = stageEnum;
     }
 
     // Validate and update status if provided
@@ -201,24 +217,24 @@ export const updateDailyUpdate = async (
         if (!validStatuses.includes(updateData.status)) {
             throw new Error(`Invalid status. Must be one of: ${validStatuses.join(", ")}`);
         }
-        dailyUpdate.status = updateData.status;
+        dataToUpdate.status = updateData.status as DailyUpdateStatus;
     }
 
     // Update description if provided
     if (updateData.description !== undefined) {
-        dailyUpdate.description = updateData.description || null;
+        dataToUpdate.description = updateData.description || null;
     }
 
     // Update projectId if provided
     if (updateData.projectId !== undefined) {
         if (updateData.projectId && updateData.projectId.trim() !== "") {
-            const project = await projectRepository.findOne({ where: { projectId: updateData.projectId } });
+            const project = await prisma.project.findUnique({ where: { projectId: updateData.projectId } });
             if (!project) {
                 throw new Error(`Project with ID ${updateData.projectId} not found`);
             }
-            dailyUpdate.projectId = updateData.projectId;
+            dataToUpdate.project = { connect: { projectId: updateData.projectId } };
         } else {
-            dailyUpdate.projectId = null;
+            dataToUpdate.project = { disconnect: true };
         }
     }
 
@@ -234,9 +250,9 @@ export const updateDailyUpdate = async (
                     throw new Error("Quantity must be a non-negative number for each raw material");
                 }
             }
-            dailyUpdate.rawMaterials = updateData.rawMaterials;
+            dataToUpdate.rawMaterials = JSON.stringify(updateData.rawMaterials);
         } else {
-            dailyUpdate.rawMaterials = null;
+            dataToUpdate.rawMaterials = Prisma.JsonNull;
         }
     }
 
@@ -248,9 +264,9 @@ export const updateDailyUpdate = async (
                 bucket: 'uploads',
                 folder: 'daily-updates/images'
             });
-            dailyUpdate.imageUrl = imageUrl;
-            dailyUpdate.imageName = image.originalname;
-            dailyUpdate.imageType = image.mimetype;
+            dataToUpdate.imageUrl = imageUrl;
+            dataToUpdate.imageName = image.originalname;
+            dataToUpdate.imageType = image.mimetype;
         } catch (error) {
             console.error("Error uploading image to Supabase:", error);
             throw new Error("Failed to upload image to storage");
@@ -265,17 +281,17 @@ export const updateDailyUpdate = async (
                 bucket: 'uploads',
                 folder: 'daily-updates/videos'
             });
-            dailyUpdate.videoUrl = videoUrl;
+            dataToUpdate.videoUrl = videoUrl;
         } catch (error) {
             console.error("Error uploading video to Supabase:", error);
             throw new Error("Failed to upload video to storage");
         }
     }
 
-    // Always update the updatedAt timestamp
-    dailyUpdate.updatedAt = new Date();
-
-    const updatedDailyUpdate = await repository.save(dailyUpdate);
+    const updatedDailyUpdate = await prisma.dailyUpdate.update({
+        where: { dailyUpdateId },
+        data: dataToUpdate,
+    });
     return updatedDailyUpdate;
 };
 
@@ -285,7 +301,8 @@ export const deleteDailyUpdate = async (dailyUpdateId: string) => {
         throw new Error("Daily update ID is required");
     }
 
-    const dailyUpdate = await repository.findOne({
+    // Check if exists
+    const dailyUpdate = await prisma.dailyUpdate.findUnique({
         where: { dailyUpdateId },
     });
 
@@ -293,7 +310,9 @@ export const deleteDailyUpdate = async (dailyUpdateId: string) => {
         throw new Error("Daily update not found");
     }
 
-    await repository.remove(dailyUpdate);
+    await prisma.dailyUpdate.delete({
+        where: { dailyUpdateId },
+    });
     return { success: true, message: "Daily update deleted successfully" };
 };
 
@@ -303,22 +322,21 @@ export const getDailyUpdateImage = async (dailyUpdateId: string) => {
         throw new Error("Daily update ID is required");
     }
 
-    const dailyUpdate = await repository.findOne({
+    const dailyUpdate = await prisma.dailyUpdate.findUnique({
         where: { dailyUpdateId },
-        select: ["dailyUpdateId", "imageName", "imageType", "imageUrl", "videoUrl", "createdAt"],
+        select: {
+            dailyUpdateId: true,
+            imageName: true,
+            imageType: true,
+            imageUrl: true,
+            videoUrl: true,
+            createdAt: true,
+        },
     });
 
     if (!dailyUpdate) {
         throw new Error("Daily update not found");
     }
 
-    return {
-        dailyUpdateId: dailyUpdate.dailyUpdateId,
-        imageName: dailyUpdate.imageName,
-        imageType: dailyUpdate.imageType,
-        imageUrl: dailyUpdate.imageUrl,
-        videoUrl: dailyUpdate.videoUrl,
-        createdAt: dailyUpdate.createdAt,
-    };
+    return dailyUpdate;
 };
-
