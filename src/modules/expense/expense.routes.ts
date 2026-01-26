@@ -1,7 +1,7 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
-const ExpenseController = require("./expense.controller.ts");
-const { adminOrSupervisorAuthMiddleware } = require("../../middleware/adminOrSupervisorAuth.middleware.ts");
+const ExpenseController = require("./expense.controller");
+const { adminOrSupervisorAuthMiddleware } = require("../../middleware/adminOrSupervisorAuth.middleware");
 
 /**
  * @swagger
@@ -47,4 +47,5 @@ router.put("/:expenseId", adminOrSupervisorAuthMiddleware, ExpenseController.upd
 router.delete("/:expenseId", adminOrSupervisorAuthMiddleware, ExpenseController.deleteExpense);
 
 module.exports = router;
+
 

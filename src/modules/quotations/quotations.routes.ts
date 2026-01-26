@@ -1,9 +1,9 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
-const QuotationController = require("./quotations.controller.ts");
+const QuotationController = require("./quotations.controller");
 const upload = require("../../config/multer.config").default;
-const { userAuthMiddleware } = require("../../middleware/userAuth.middleware.ts");
-const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware.ts");
+const { userAuthMiddleware } = require("../../middleware/userAuth.middleware");
+const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware");
 
 // ============================================
 // Public/Admin Routes (no user auth required)
@@ -48,4 +48,5 @@ router.put("/:quotationId", upload.single("file"), QuotationController.updateQuo
 router.delete("/:quotationId", QuotationController.deleteQuotation);
 
 module.exports = router;
+
 

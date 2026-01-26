@@ -1,8 +1,8 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
-const DailyUpdatesController = require("./daily-updates.controller.ts");
+const DailyUpdatesController = require("./daily-updates.controller");
 const upload = require("../../config/multer.config").default;
-const { supervisorAuthMiddleware } = require("../../middleware/supervisorAuth.middleware.ts");
+const { supervisorAuthMiddleware } = require("../../middleware/supervisorAuth.middleware");
 
 /**
  * @swagger
@@ -39,4 +39,5 @@ router.put("/:dailyUpdateId", supervisorAuthMiddleware, upload.fields([{ name: '
 router.delete("/:dailyUpdateId", supervisorAuthMiddleware, DailyUpdatesController.deleteDailyUpdate);
 
 module.exports = router;
+
 

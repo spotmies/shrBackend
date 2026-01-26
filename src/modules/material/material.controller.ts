@@ -1,5 +1,5 @@
-import type { Request, Response } from "express";
-const MaterialServices = require("./material.services.ts");
+﻿import type { Request, Response } from "express";
+const MaterialServices = require("./material.services");
 
 /**
  * @swagger
@@ -351,4 +351,5 @@ exports.deleteMaterial = async (req: Request, res: Response) => {
         });
     }
 };
+
 

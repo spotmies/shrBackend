@@ -1,18 +1,18 @@
 const express = require("express");
 const cors = require("cors");
 const swaggerUi = require("swagger-ui-express");
-const swaggerSpec = require("./config/swagger.ts");
-const projectRoutes = require("./modules/project/project.routes.ts");
-const userRoutes = require("./modules/user/user.routes.ts")
-const quotationsRoutes = require("./modules/quotations/quotations.routes.ts")
-const authRoutes = require("./modules/auth/auth.routes.ts")
-const documentsRoutes = require("./modules/documents/documents.routes.ts")
-const paymentRoutes = require("./modules/payments/payments.routes.ts")
-const supervisorRoutes = require("./modules/supervisor/supervisor.routes.ts")
-const materialRoutes = require("./modules/material/material.routes.ts")
-const expenseRoutes = require("./modules/expense/expense.routes.ts")
-const dailyUpdatesRoutes = require("./modules/daily-updates/daily-updates.routes.ts")
-const {Request,Response} = require("express");
+const swaggerSpec = require("./config/swagger");
+const projectRoutes = require("./modules/project/project.routes");
+const userRoutes = require("./modules/user/user.routes")
+const quotationsRoutes = require("./modules/quotations/quotations.routes")
+const authRoutes = require("./modules/auth/auth.routes")
+const documentsRoutes = require("./modules/documents/documents.routes")
+const paymentRoutes = require("./modules/payments/payments.routes")
+const supervisorRoutes = require("./modules/supervisor/supervisor.routes")
+const materialRoutes = require("./modules/material/material.routes")
+const expenseRoutes = require("./modules/expense/expense.routes")
+const dailyUpdatesRoutes = require("./modules/daily-updates/daily-updates")
+const { Request, Response } = require("express");
 
 /* -------------------- U can have Routes N Middlewares imports-------------------- */
 
@@ -23,7 +23,7 @@ const app = express();
 app.use(cors());
 
 // JSON body parser with custom error handling
-app.use(express.json({ 
+app.use(express.json({
     limit: '10mb',
     strict: true
 }));
@@ -57,9 +57,9 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // });
 
 
-app.use("/api/project",projectRoutes)
-app.use("/api/user",userRoutes)
-app.use("/api/quotations",quotationsRoutes)
+app.use("/api/project", projectRoutes)
+app.use("/api/user", userRoutes)
+app.use("/api/quotations", quotationsRoutes)
 app.use("/api/auth", authRoutes)
 app.use("/api/documents", documentsRoutes)
 app.use("/api/payment", paymentRoutes)
@@ -74,5 +74,6 @@ app.use("/api/daily-updates", dailyUpdatesRoutes)
 //     });
 // });
 
-module.exports = app;
-module.exports.default = app;
+// module.exports = app;
+// module.exports.default = app;
+export default app;
