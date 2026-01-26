@@ -1,12 +1,7 @@
-const { AppDataSource } = require("../../data-source/typeorm.ts");
-const PaymentsEntity = require("./payments.entity");
-const { ProjectEntity } = require("../project/project.entity.ts");
+﻿import prisma from "../../config/prisma.client";
+import { PaymentMethod, PaymentStatus, Prisma } from "@prisma/client";
 
-
-const repository = AppDataSource.getRepository(PaymentsEntity);
-const projectRepository = AppDataSource.getRepository(ProjectEntity);
-
-exports.createPayment = async (data:
+export const createPayment = async (data:
     {
         amount: number,
         projectId: string,
@@ -18,33 +13,30 @@ exports.createPayment = async (data:
         updatedAt: Date
     }) => {
 
-    const newPayment = repository.create({
+    const newPayment = await prisma.payment.create({
+        data: {
+            amount: data.amount,
+            projectId: data.projectId,
+            paymentStatus: data.paymentStatus as PaymentStatus,
+            paymentMethod: data.paymentMethod as PaymentMethod,
+            paymentDate: data.paymentDate,
+            remarks: data.remarks || null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        }
+    });
 
-        amount: data.amount,
-        projectId: data.projectId,
-        paymentStatus: data.paymentStatus,
-        paymentMethod: data.paymentMethod,
-        paymentDate: data.paymentDate,
-        remarks: data.remarks || null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-    })
-
-    const savedPayment = await repository.save(newPayment);
-
-    return savedPayment;
-
+    return newPayment;
 }
 
 // Get payment by ID
-exports.getPaymentByPaymentId = async (paymentId: string) => {
+export const getPaymentByPaymentId = async (paymentId: string) => {
 
     if (!paymentId) {
         throw new Error("Payment not exists");
     }
-    const payment = await repository.findOne({
+    const payment = await prisma.payment.findUnique({
         where: { paymentId },
-
     });
     if (!payment) {
         throw new Error("Payment not found");
@@ -53,8 +45,8 @@ exports.getPaymentByPaymentId = async (paymentId: string) => {
 };
 
 // Get all payments
-exports.getAllThePayments = async () => {
-    const payments = await repository.find();
+export const getAllThePayments = async () => {
+    const payments = await prisma.payment.findMany();
 
     if (!payments) {
         return [];
@@ -63,7 +55,7 @@ exports.getAllThePayments = async () => {
 };
 
 // Update payment
-exports.updatePayment = async (paymentId: string, updateData: {
+export const updatePayment = async (paymentId: string, updateData: {
     amount?: number,
     projectId?: string,
     paymentStatus?: string,
@@ -72,28 +64,40 @@ exports.updatePayment = async (paymentId: string, updateData: {
     remarks?: string | null,
     updatedAt?: Date
 }) => {
-    const payment = await repository.findOne({ where: { paymentId } });
+    const payment = await prisma.payment.findUnique({ where: { paymentId } });
 
     if (!payment) {
         throw new Error("Payment not found");
     }
 
-    Object.assign(payment, updateData, { updatedAt: new Date() });
+    const dataToUpdate: Prisma.PaymentUpdateInput = {
+        updatedAt: new Date(),
+    };
 
-    const updatedPayment = await repository.save(payment);
+    if (updateData.amount !== undefined) dataToUpdate.amount = updateData.amount;
+    if (updateData.projectId !== undefined) dataToUpdate.project = { connect: { projectId: updateData.projectId } };
+    if (updateData.paymentStatus !== undefined) dataToUpdate.paymentStatus = updateData.paymentStatus as PaymentStatus;
+    if (updateData.paymentMethod !== undefined) dataToUpdate.paymentMethod = updateData.paymentMethod as PaymentMethod;
+    if (updateData.paymentDate !== undefined) dataToUpdate.paymentDate = updateData.paymentDate;
+    if (updateData.remarks !== undefined) dataToUpdate.remarks = updateData.remarks;
+
+    const updatedPayment = await prisma.payment.update({
+        where: { paymentId },
+        data: dataToUpdate,
+    });
 
     return updatedPayment;
 };
 
 // Delete payment
-exports.deletePayment = async (paymentId: string) => {
-    const payment = await repository.findOne({ where: { paymentId } });
+export const deletePayment = async (paymentId: string) => {
+    const payment = await prisma.payment.findUnique({ where: { paymentId } });
 
     if (!payment) {
         throw new Error("Payment not found");
     }
 
-    await repository.remove(payment);
+    await prisma.payment.delete({ where: { paymentId } });
 
     return { success: true, message: "Payment deleted successfully" };
 };
@@ -104,23 +108,28 @@ exports.deletePayment = async (paymentId: string) => {
  * Get budget summary across all projects
  * Calculates: Total Budget, Payment Received, Payment Pending
  */
-exports.getBudgetSummary = async () => {
+export const getBudgetSummary = async () => {
     // Get all projects with their budgets
-    const projects = await projectRepository.find();
+    const projects = await prisma.project.findMany();
 
     // Get all completed payments grouped by project
-    const paymentsByProject = await repository
-        .createQueryBuilder("payment")
-        .select("payment.projectId", "projectId")
-        .addSelect("COALESCE(SUM(payment.amount), 0)", "paymentReceived")
-        .where("payment.paymentStatus = :status", { status: "completed" })
-        .groupBy("payment.projectId")
-        .getRawMany();
+    const paymentsByProject = await prisma.payment.groupBy({
+        by: ['projectId'],
+        _sum: {
+            amount: true
+        },
+        where: {
+            paymentStatus: PaymentStatus.completed,
+            projectId: { not: null } // Ensure projectId is not null
+        }
+    });
 
     // Create a map for quick lookup
     const paymentMap = new Map();
     paymentsByProject.forEach((item: any) => {
-        paymentMap.set(item.projectId, parseFloat(item.paymentReceived));
+        if (item.projectId) {
+            paymentMap.set(item.projectId, parseFloat(item._sum.amount?.toString() || "0"));
+        }
     });
 
     // Calculate totals
@@ -128,7 +137,7 @@ exports.getBudgetSummary = async () => {
     let totalPaymentReceived = 0;
 
     projects.forEach((project: any) => {
-        const budget = parseFloat(project.totalBudget) || 0;
+        const budget = parseFloat(project.totalBudget.toString()) || 0;
         const received = paymentMap.get(project.projectId) || 0;
         totalBudget += budget;
         totalPaymentReceived += received;
@@ -156,38 +165,44 @@ exports.getBudgetSummary = async () => {
  * Calculates: Total Budget, Paid Amount, Pending Amount, Progress Percentage
  * @param projectId - Project ID to get budget summary for
  */
-exports.getBudgetSummaryByProject = async (projectId: string) => {
+export const getBudgetSummaryByProject = async (projectId: string) => {
     if (!projectId) {
         throw new Error("Project ID is required");
     }
 
     // Get the project
-    const project = await projectRepository.findOne({ where: { projectId } });
+    const project = await prisma.project.findUnique({ where: { projectId } });
 
     if (!project) {
         throw new Error("Project not found");
     }
 
-    const totalBudget = parseFloat(project.totalBudget) || 0;
+    const totalBudget = parseFloat(project.totalBudget.toString()) || 0;
 
     // Get completed payments for this project
-    const completedPayments = await repository
-        .createQueryBuilder("payment")
-        .select("COALESCE(SUM(payment.amount), 0)", "paidAmount")
-        .where("payment.projectId = :projectId", { projectId })
-        .andWhere("payment.paymentStatus = :status", { status: "completed" })
-        .getRawOne();
+    const completedPayments = await prisma.payment.aggregate({
+        _sum: {
+            amount: true
+        },
+        where: {
+            projectId: projectId,
+            paymentStatus: PaymentStatus.completed
+        }
+    });
 
     // Get pending payments for this project
-    const pendingPayments = await repository
-        .createQueryBuilder("payment")
-        .select("COALESCE(SUM(payment.amount), 0)", "pendingAmount")
-        .where("payment.projectId = :projectId", { projectId })
-        .andWhere("payment.paymentStatus = :status", { status: "pending" })
-        .getRawOne();
+    const pendingPayments = await prisma.payment.aggregate({
+        _sum: {
+            amount: true
+        },
+        where: {
+            projectId: projectId,
+            paymentStatus: PaymentStatus.pending
+        }
+    });
 
-    const paidAmount = parseFloat(completedPayments?.paidAmount || 0);
-    const pendingAmount = parseFloat(pendingPayments?.pendingAmount || 0);
+    const paidAmount = parseFloat(completedPayments._sum.amount?.toString() || "0");
+    const pendingAmount = parseFloat(pendingPayments._sum.amount?.toString() || "0");
 
     // Calculate payment progress percentage
     const progressPercentage = totalBudget > 0
@@ -203,5 +218,3 @@ exports.getBudgetSummaryByProject = async (projectId: string) => {
         progressPercentage: progressPercentage
     };
 };
-
-

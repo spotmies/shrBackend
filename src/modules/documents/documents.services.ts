@@ -1,10 +1,5 @@
-import { AppDataSource } from "../../data-source/typeorm";
-import { DocumentEntity } from "./documents.entity";
-import { ProjectEntity } from "../project/project.entity";
-
-const repository = AppDataSource.getRepository(DocumentEntity);
-const projectRepository = AppDataSource.getRepository(ProjectEntity);
-
+﻿import prisma from "../../config/prisma.client";
+import { DocumentType, Document } from "@prisma/client";
 
 export const createDocument = async (
     data: {
@@ -29,26 +24,25 @@ export const createDocument = async (
         throw new Error("File is required");
     }
 
-
     const validTypes = ["Agreement", "plans", "permit", "others"];
     if (!validTypes.includes(data.documentType)) {
         throw new Error(`Invalid document type. Must be one of: ${validTypes.join(", ")}`);
     }
 
-    const newDocument = repository.create({
-        documentType: data.documentType,
-        description: data.description || null,
-        projectId: data.projectId || null,
-        fileData: file.buffer,
-        fileName: file.originalname,
-        fileType: file.mimetype,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+    const newDocument = await prisma.document.create({
+        data: {
+            documentType: data.documentType as DocumentType,
+            description: data.description || null,
+            projectId: data.projectId || null,
+            fileData: file.buffer as any,
+            fileName: file.originalname,
+            fileType: file.mimetype,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        }
     });
 
-    const savedDocument = await repository.save(newDocument);
-
-    return savedDocument;
+    return newDocument;
 };
 
 
@@ -57,7 +51,7 @@ export const getDocumentById = async (documentId: string) => {
         throw new Error("Document ID is required");
     }
 
-    const document = await repository.findOne({
+    const document = await prisma.document.findUnique({
         where: { documentId },
     });
 
@@ -78,7 +72,7 @@ export const getAllDocuments = async (filters?: {
     if (filters?.documentType) {
         const validTypes = ["Agreement", "plans", "permit", "others"];
         if (validTypes.includes(filters.documentType)) {
-            where.documentType = filters.documentType;
+            where.documentType = filters.documentType as DocumentType;
         }
     }
 
@@ -86,10 +80,10 @@ export const getAllDocuments = async (filters?: {
         where.projectId = filters.projectId;
     }
 
-    const documents = await repository.find({
+    const documents = await prisma.document.findMany({
         where,
-        order: {
-            createdAt: "DESC", // Most recent first
+        orderBy: {
+            createdAt: "desc", // Most recent first
         },
     });
 
@@ -107,10 +101,10 @@ export const getDocumentsByType = async (documentType: string) => {
         throw new Error(`Invalid document type. Must be one of: ${validTypes.join(", ")}`);
     }
 
-    const documents = await repository.find({
-        where: { documentType },
-        order: {
-            createdAt: "DESC",
+    const documents = await prisma.document.findMany({
+        where: { documentType: documentType as DocumentType },
+        orderBy: {
+            createdAt: "desc",
         },
     });
 
@@ -128,7 +122,7 @@ export const getDocumentsByProject = async (projectId: string) => {
     }
 
     // Get the project details
-    const project = await projectRepository.findOne({
+    const project = await prisma.project.findUnique({
         where: { projectId }
     });
 
@@ -137,10 +131,10 @@ export const getDocumentsByProject = async (projectId: string) => {
     }
 
     // Get all documents for this project
-    const documents = await repository.find({
+    const documents = await prisma.document.findMany({
         where: { projectId },
-        order: {
-            createdAt: "DESC",
+        orderBy: {
+            createdAt: "desc",
         },
     });
 
@@ -199,10 +193,14 @@ export const updateDocument = async (
         mimetype: string;
     }
 ) => {
-    const document = await repository.findOne({ where: { documentId } });
+    const document = await prisma.document.findUnique({ where: { documentId } });
 
     if (!document) {
         throw new Error("Document not found");
+    }
+
+    const dataToUpdate: any = {
+        updatedAt: new Date(),
     }
 
     // Update document type if provided
@@ -211,30 +209,30 @@ export const updateDocument = async (
         if (!validTypes.includes(updateData.documentType)) {
             throw new Error(`Invalid document type. Must be one of: ${validTypes.join(", ")}`);
         }
-        document.documentType = updateData.documentType;
+        dataToUpdate.documentType = updateData.documentType as DocumentType;
     }
 
     // Update description if provided
     if (updateData.description !== undefined) {
-        document.description = updateData.description || null;
+        dataToUpdate.description = updateData.description || null;
     }
 
     // Update project ID if provided
     if (updateData.projectId !== undefined) {
-        document.projectId = updateData.projectId;
+        dataToUpdate.projectId = updateData.projectId;
     }
 
     // Update file if provided
     if (file) {
-        document.fileData = file.buffer;
-        document.fileName = file.originalname;
-        document.fileType = file.mimetype;
+        dataToUpdate.fileData = file.buffer;
+        dataToUpdate.fileName = file.originalname;
+        dataToUpdate.fileType = file.mimetype;
     }
 
-    // Always update the updatedAt timestamp
-    document.updatedAt = new Date();
-
-    const updatedDocument = await repository.save(document);
+    const updatedDocument = await prisma.document.update({
+        where: { documentId },
+        data: dataToUpdate,
+    });
 
     return updatedDocument;
 };
@@ -245,13 +243,13 @@ export const deleteDocument = async (documentId: string) => {
         throw new Error("Document ID is required");
     }
 
-    const document = await repository.findOne({ where: { documentId } });
+    const document = await prisma.document.findUnique({ where: { documentId } });
 
     if (!document) {
         throw new Error("Document not found");
     }
 
-    await repository.remove(document);
+    await prisma.document.delete({ where: { documentId } });
 
     return { success: true, message: "Document deleted successfully" };
 };
@@ -262,9 +260,16 @@ export const getDocumentFile = async (documentId: string) => {
         throw new Error("Document ID is required");
     }
 
-    const document = await repository.findOne({
+    const document = await prisma.document.findUnique({
         where: { documentId },
-        select: ["documentId", "fileName", "fileType", "fileData", "documentType", "createdAt"],
+        select: {
+            documentId: true,
+            fileName: true,
+            fileType: true,
+            fileData: true,
+            documentType: true,
+            createdAt: true,
+        },
     });
 
     if (!document) {
@@ -287,12 +292,12 @@ export const getDocumentFile = async (documentId: string) => {
  */
 export const getDocumentCountsByType = async () => {
     // Get counts for each document type
-    const counts = await repository
-        .createQueryBuilder("document")
-        .select("document.documentType", "documentType")
-        .addSelect("COUNT(document.documentId)", "count")
-        .groupBy("document.documentType")
-        .getRawMany();
+    const counts = await prisma.document.groupBy({
+        by: ['documentType'],
+        _count: {
+            documentId: true
+        }
+    });
 
     // Initialize all types with 0
     const result: any = {
@@ -306,7 +311,7 @@ export const getDocumentCountsByType = async () => {
     // Map the counts to result object
     counts.forEach((item: any) => {
         const type = item.documentType;
-        const count = parseInt(item.count, 10);
+        const count = item._count.documentId;
         if (result.hasOwnProperty(type)) {
             result[type] = count;
             result.total += count;
@@ -315,4 +320,5 @@ export const getDocumentCountsByType = async () => {
 
     return result;
 };
+
 
