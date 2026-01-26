@@ -11,7 +11,7 @@ const paymentRoutes = require("./modules/payments/payments.routes")
 const supervisorRoutes = require("./modules/supervisor/supervisor.routes")
 const materialRoutes = require("./modules/material/material.routes")
 const expenseRoutes = require("./modules/expense/expense.routes")
-const dailyUpdatesRoutes = require("./modules/daily-updates/daily-updates")
+const dailyUpdatesRoutes = require("./modules/daily-updates/daily-updates.routes")
 const { Request, Response } = require("express");
 
 /* -------------------- U can have Routes N Middlewares imports-------------------- */
