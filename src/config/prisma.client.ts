@@ -7,10 +7,10 @@ import path from "path";
 // Ensure environment variables are loaded
 dotenv.config({ path: path.join(__dirname, ".env") });
 
-const connectionString = process.env.DATABASE_URL;
+const connectionString = process.env.DATABASE_PUBLIC_URL;
 
 if (!connectionString) {
-    throw new Error("DATABASE_URL is not defined in environment variables");
+    throw new Error("DATABASE_PUBLIC_URL is not defined in environment variables");
 }
 
 const pool = new Pool({ connectionString });
