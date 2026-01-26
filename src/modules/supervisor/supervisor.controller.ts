@@ -1,5 +1,5 @@
-import type { Request, Response } from "express";
-const SupervisorServices = require("./supervisor.services.ts");
+﻿import type { Request, Response } from "express";
+const SupervisorServices = require("./supervisor.services");
 
 /**
  * @swagger
@@ -577,6 +577,7 @@ exports.getAssignedProjects = async (req: Request, res: Response) => {
         });
     }
 };
+
 
 
 

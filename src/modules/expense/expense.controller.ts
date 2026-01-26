@@ -1,5 +1,5 @@
-import type { Request, Response } from "express";
-const ExpenseServices = require("./expense.services.ts");
+﻿import type { Request, Response } from "express";
+const ExpenseServices = require("./expense.services");
 
 /**
  * @swagger
@@ -595,4 +595,5 @@ exports.getExpenseSummaryByProject = async (req: Request, res: Response) => {
         });
     }
 };
+
 

@@ -1,7 +1,7 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
-const SupervisorController = require("./supervisor.controller.ts");
-const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware.ts");
+const SupervisorController = require("./supervisor.controller");
+const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware");
 
 // Get all supervisors
 router.get("/", SupervisorController.getAllSupervisors);
@@ -31,4 +31,5 @@ router.put("/:supervisorId", adminAuthMiddleware, SupervisorController.updateSup
 router.delete("/:supervisorId", adminAuthMiddleware, SupervisorController.deleteSupervisor);
 
 module.exports = router;
+
 

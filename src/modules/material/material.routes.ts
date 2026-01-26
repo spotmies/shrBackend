@@ -1,7 +1,7 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
-const MaterialController = require("./material.controller.ts");
-const { adminOrSupervisorAuthMiddleware } = require("../../middleware/adminOrSupervisorAuth.middleware.ts");
+const MaterialController = require("./material.controller");
+const { adminOrSupervisorAuthMiddleware } = require("../../middleware/adminOrSupervisorAuth.middleware");
 
 // Get total material count (must come before /:materialId route)
 router.get("/total-count", MaterialController.getTotalMaterialCount);
@@ -28,4 +28,5 @@ router.put("/:materialId", adminOrSupervisorAuthMiddleware, MaterialController.u
 router.delete("/:materialId", adminOrSupervisorAuthMiddleware, MaterialController.deleteMaterial);
 
 module.exports = router;
+
 

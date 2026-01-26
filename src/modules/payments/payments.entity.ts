@@ -1,4 +1,4 @@
-const {
+﻿const {
   Entity,
   PrimaryGeneratedColumn,
   Column,
@@ -8,7 +8,7 @@ const {
   UpdateDateColumn
 } = require("typeorm");
 
-const { ProjectEntity } = require("../project/project.entity.ts");
+const { ProjectEntity } = require("../project/project.entity");
 
 @Entity({ name: "payments" })
 class PaymentsEntity {
@@ -43,3 +43,4 @@ class PaymentsEntity {
 
 module.exports = PaymentsEntity;
 module.exports.default = PaymentsEntity;
+

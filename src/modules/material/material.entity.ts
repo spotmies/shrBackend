@@ -1,4 +1,4 @@
-const {
+﻿const {
     Entity,
     PrimaryGeneratedColumn,
     Column,
@@ -8,7 +8,7 @@ const {
     UpdateDateColumn
 } = require("typeorm");
 
-const { ProjectEntity } = require("../project/project.entity.ts");
+const { ProjectEntity } = require("../project/project.entity");
 
 @Entity({ name: "materials" })
 class MaterialEntity {
@@ -19,7 +19,7 @@ class MaterialEntity {
     projectId!: string;
 
     @ManyToOne(() => {
-        const { ProjectEntity } = require("../project/project.entity.ts");
+        const { ProjectEntity } = require("../project/project.entity");
         return ProjectEntity;
     })
     @JoinColumn({ name: "projectId" })
@@ -46,5 +46,6 @@ class MaterialEntity {
 
 module.exports = MaterialEntity;
 module.exports.default = MaterialEntity;
+
 
 

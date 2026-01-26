@@ -1,8 +1,8 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
-const UserController = require("./user.controller.ts");
-const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware.ts");
-const { customerAuthMiddleware } = require("../../middleware/customerAuth.middleware.ts");
+const UserController = require("./user.controller");
+const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware");
+const { customerAuthMiddleware } = require("../../middleware/customerAuth.middleware");
 
 // Get all users
 router.get("/", UserController.getAllUsers);
@@ -26,3 +26,4 @@ router.post("/:userId/approve-supervisor", customerAuthMiddleware, UserControlle
 router.post("/:userId/reject-supervisor", customerAuthMiddleware, UserController.rejectSupervisor);
 
 module.exports = router;
+

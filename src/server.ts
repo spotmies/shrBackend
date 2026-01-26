@@ -1,6 +1,23 @@
-const app = require("./app").default || require("./app");
-const dotenv = require("dotenv");
-dotenv.config({ path: "./src/config/.env" });
+import dotenv from "dotenv";
+import path from "path";
+import fs from "fs";
+
+// Robust environment variable loading
+const envPaths = [
+    path.resolve(process.cwd(), ".env"),
+    path.resolve(process.cwd(), "src/config/.env"),
+    path.resolve(__dirname, "config/.env"), // Relative to compiled JS
+];
+
+for (const envPath of envPaths) {
+    if (fs.existsSync(envPath)) {
+        dotenv.config({ path: envPath });
+        console.log(`Loaded environment from: ${envPath}`);
+        break;
+    }
+}
+
+import app from "./app";
 
 async function startServer() {
     try {

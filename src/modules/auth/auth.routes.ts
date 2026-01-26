@@ -1,6 +1,6 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
-const authController = require("./auth.controller.ts");
+const authController = require("./auth.controller");
 
 /**
  * @swagger

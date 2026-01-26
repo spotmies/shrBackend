@@ -1,5 +1,5 @@
-import type { Request, Response } from "express";
-const DocumentServices = require("./documents.services.ts");
+﻿import type { Request, Response } from "express";
+const DocumentServices = require("./documents.services");
 
 interface MulterRequest extends Request {
     user?: {
@@ -726,4 +726,5 @@ exports.getDocumentCountsByType = async (req: Request, res: Response) => {
         });
     }
 };
+
 
