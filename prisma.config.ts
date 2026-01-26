@@ -1,5 +1,9 @@
-/// <reference types="node" />
-import "dotenv/config";
+import { config } from "dotenv";
+import path from "path";
+
+// Load environment variables from the correct path
+config({ path: path.resolve(__dirname, "src/config/.env") });
+
 import { defineConfig } from "prisma/config";
 
 export default defineConfig({
@@ -8,6 +12,6 @@ export default defineConfig({
         path: "prisma/migrations",
     },
     datasource: {
-        url: process.env["DATABASE_PUBLIC_URL"],
+        url: "postgresql://postgres:FEPNVAXUKupqkwZCKbDKdCkyWNgrWLLP@caboose.proxy.rlwy.net:58514/railway",
     },
 });
