@@ -1,8 +1,8 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
 
-const paymentController = require("./payments.controller.ts");
-const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware.ts");
+const paymentController = require("./payments.controller");
+const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware");
 
 // Admin only routes
 router.post("/createpayment", adminAuthMiddleware, paymentController.createPayment);
@@ -16,5 +16,6 @@ router.get("/budget-summary", paymentController.getBudgetSummary);
 router.get("/budget-summary/:projectId", paymentController.getBudgetSummaryByProject);
 
 module.exports = router;
+
 
 

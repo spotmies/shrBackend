@@ -1,5 +1,5 @@
-import type { Request, Response } from "express";
-const authServices = require("./auth.services.ts");
+﻿import type { Request, Response } from "express";
+const authServices = require("./auth.services");
 
 /**
  * @swagger
@@ -239,5 +239,6 @@ exports.supervisorLogin = async (req: Request, res: Response) => {
         });
     }
 };
+
 
 

@@ -1,6 +1,6 @@
-import type { Request, Response } from "express";
+﻿import type { Request, Response } from "express";
 
-const QuotationServices = require("./quotations.services.ts");
+const QuotationServices = require("./quotations.services");
 
 interface MulterRequest extends Request {
     file?: Express.Multer.File;
@@ -854,4 +854,5 @@ exports.rejectQuotation = async (req: Request, res: Response) => {
         });
     }
 };
+
 

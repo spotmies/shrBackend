@@ -1,5 +1,5 @@
-import type { Request,Response} from "express";
-const PaymentServices = require("./payments.services.ts");
+﻿import type { Request,Response} from "express";
+const PaymentServices = require("./payments.services");
 
 /**
  * @swagger
@@ -534,5 +534,6 @@ exports.getBudgetSummaryByProject = async(req:Request,res:Response)=>{
         })
     }
 }
+
 
 

@@ -1,5 +1,5 @@
-import type { Request, Response } from "express";
-const UserServices = require("./user.services.ts");
+﻿import type { Request, Response } from "express";
+const UserServices = require("./user.services");
 
 /**
  * @swagger
