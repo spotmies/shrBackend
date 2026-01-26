@@ -211,7 +211,7 @@ exports.createQuotation = async (req: MulterRequest, res: Response) => {
 //GETBYID
 exports.getQuotationById = async (req: Request, res: Response) => {
     try {
-        const quotationId = req.params.quotationId
+        const quotationId = req.params.quotationId as string;
         const quotation = await QuotationServices.getQuotationByQuotationId(quotationId);
 
         return res.status(200).json({
@@ -429,7 +429,7 @@ exports.getAllQuotations = async (req: Request, res: Response) => {
 //PUT
 exports.updateQuotation = async (req: MulterRequest, res: Response) => {
     try {
-        const quotationId = req.params.quotationId;
+        const quotationId = req.params.quotationId as string;
 
         // Validate quotationId
         if (!quotationId || quotationId.trim() === '') {
@@ -583,7 +583,7 @@ exports.updateQuotation = async (req: MulterRequest, res: Response) => {
 //DELETE
 exports.deleteQuotation = async (req: Request, res: Response) => {
     try {
-        const quotationId = req.params.quotationId;
+        const quotationId = req.params.quotationId as string;
 
         const deletedQuotationData = await QuotationServices.deleteQuotation(quotationId);
 
@@ -657,7 +657,7 @@ exports.getPendingQuotations = async (req: Request, res: Response) => {
  */
 exports.getQuotationsByStatus = async (req: Request, res: Response) => {
     try {
-        const { status } = req.params;
+        const status = req.params.status as string;
 
         const quotations = await QuotationServices.getQuotationsByStatus(status);
 
@@ -700,7 +700,7 @@ exports.getQuotationsByStatus = async (req: Request, res: Response) => {
  */
 exports.getQuotationsByProject = async (req: Request, res: Response) => {
     try {
-        const { projectId } = req.params;
+        const projectId = req.params.projectId as string;
 
         const quotations = await QuotationServices.getQuotationsByProject(projectId);
 
@@ -759,7 +759,7 @@ exports.getQuotationsByProject = async (req: Request, res: Response) => {
  */
 exports.approveQuotation = async (req: Request, res: Response) => {
     try {
-        const { quotationId } = req.params;
+        const quotationId = req.params.quotationId as string;
 
         // Get user ID from authentication middleware
         const userId = (req as any).user?.userId;
@@ -828,7 +828,7 @@ exports.approveQuotation = async (req: Request, res: Response) => {
  */
 exports.rejectQuotation = async (req: Request, res: Response) => {
     try {
-        const { quotationId } = req.params;
+        const quotationId = req.params.quotationId as string;
 
         // Get user ID from authentication middleware
         const userId = (req as any).user?.userId;
