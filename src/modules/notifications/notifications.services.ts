@@ -70,7 +70,7 @@ export const createNotification = async (userId: string, message: string, type?:
         data: {
             userId,
             message,
-            type
+            type: type || null
         }
     });
     return notification;
