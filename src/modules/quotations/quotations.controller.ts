@@ -110,12 +110,17 @@ exports.createQuotation = async (req: MulterRequest, res: Response) => {
         }
 
         // Parse lineItems from JSON string if provided
-        let lineItems: Array<{ description: string; amount: number }> | null = null;
+        let lineItems: any[] | null = null;
         if (req.body.lineItems) {
             try {
                 lineItems = typeof req.body.lineItems === 'string'
                     ? JSON.parse(req.body.lineItems)
                     : req.body.lineItems;
+
+                // If parsed/original lineItems is not an array but is an object (and not null), wrap it
+                if (!Array.isArray(lineItems) && typeof lineItems === 'object' && lineItems !== null) {
+                    lineItems = [lineItems];
+                }
 
                 // Validate lineItems structure
                 if (!Array.isArray(lineItems)) {
@@ -123,8 +128,20 @@ exports.createQuotation = async (req: MulterRequest, res: Response) => {
                 }
 
                 // Validate each item has description and amount
-                for (const item of lineItems) {
-                    if (!item.description || typeof item.amount !== 'number') {
+                for (let i = 0; i < lineItems.length; i++) {
+                    let item = lineItems[i];
+
+                    // Parse item if it's a string
+                    if (typeof item === 'string') {
+                        try {
+                            item = JSON.parse(item);
+                            lineItems[i] = item; // Update array with parsed object
+                        } catch (e) {
+                            throw new Error(`Invalid JSON in lineItem at index ${i}`);
+                        }
+                    }
+
+                    if (!item || typeof item !== 'object' || !item.description || typeof item.amount !== 'number') {
                         throw new Error("Each line item must have 'description' (string) and 'amount' (number)");
                     }
                 }

@@ -1,6 +1,104 @@
 ﻿import type { Request, Response } from "express";
 const SupervisorServices = require("./supervisor.services");
 
+interface AuthenticatedRequest extends Request {
+    user?: {
+        userId?: string;
+        email: string;
+        role: string;
+    };
+}
+
+/**
+ * @swagger
+ * /api/supervisor/profile:
+ *   get:
+ *     summary: Get my profile (Supervisor)
+ *     tags: [Supervisors]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profile fetched successfully
+ */
+exports.getProfile = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        if (!req.user || req.user.role !== 'supervisor') {
+            return res.status(401).json({ success: false, message: "Unauthorized: Supervisor access required" });
+        }
+
+        // userId from commonAuthMiddleware is mapped to supervisorId for supervisors
+        const supervisorId = req.user.userId;
+        if (!supervisorId) {
+            return res.status(404).json({ success: false, message: "Supervisor ID not found in token" });
+        }
+
+        const profile = await SupervisorServices.getSupervisorProfile(supervisorId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Profile fetched successfully",
+            data: profile
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/supervisor/profile:
+ *   put:
+ *     summary: Update my profile
+ *     tags: [Supervisors]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               fullName:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               phoneNumber:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Profile updated successfully
+ */
+exports.updateProfile = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        if (!req.user || req.user.role !== 'supervisor') {
+            return res.status(401).json({ success: false, message: "Unauthorized: Supervisor access required" });
+        }
+
+        const supervisorId = req.user.userId;
+        if (!supervisorId) {
+            return res.status(404).json({ success: false, message: "Supervisor ID not found in token" });
+        }
+
+        const updatedProfile = await SupervisorServices.updateSupervisor(supervisorId, req.body);
+
+        return res.status(200).json({
+            success: true,
+            message: "Profile updated successfully",
+            data: updatedProfile
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
 /**
  * @swagger
  * /api/supervisor:

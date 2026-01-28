@@ -99,6 +99,47 @@ export const getSupervisorById = async (supervisorId: string) => {
     };
 };
 
+export const getSupervisorProfile = async (supervisorId: string) => {
+    if (!supervisorId) {
+        throw new Error("Supervisor ID is required");
+    }
+
+    const supervisor = await prisma.supervisor.findUnique({
+        where: { supervisorId }
+    });
+
+    if (!supervisor) {
+        throw new Error("Supervisor not found");
+    }
+
+    // Get project stats
+    // Active: Not Completed (Planning, Inprogress, OnHold)
+    const activeProjectsCount = await prisma.project.count({
+        where: {
+            supervisorId,
+            initialStatus: {
+                not: 'Completed' as any // Type casting for now if types aren't generated yet or use ProjectStatus.Completed
+            }
+        }
+    });
+
+    // Completed: Status is Completed
+    const completedProjectsCount = await prisma.project.count({
+        where: {
+            supervisorId,
+            initialStatus: 'Completed' as any
+        }
+    });
+
+    const { password: _, ...supervisorWithoutPassword } = supervisor;
+
+    return {
+        ...supervisorWithoutPassword,
+        assignedCount: activeProjectsCount,
+        completedCount: completedProjectsCount
+    };
+};
+
 // Get all supervisors
 export const getAllSupervisors = async () => {
     const supervisors = await prisma.supervisor.findMany({

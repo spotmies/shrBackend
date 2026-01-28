@@ -340,3 +340,101 @@ export const getDailyUpdateImage = async (dailyUpdateId: string) => {
 
     return dailyUpdate;
 };
+
+// Get daily updates by status for a specific user (Customer)
+// The user sees updates for projects they are assigned to
+export const getDailyUpdatesByStatusForUser = async (userId: string, status: string) => {
+    // Validate status
+    const validStatuses = ["pending", "approved", "rejected"];
+    if (!validStatuses.includes(status)) {
+        throw new Error(`Invalid status. Must be one of: ${validStatuses.join(", ")}`);
+    }
+
+    // Find all projects belonging to the user
+    // Assuming User <-> Project relationship (user has many projects)
+    const userProjects = await prisma.project.findMany({
+        where: { userId: userId },
+        select: { projectId: true }
+    });
+
+    if (userProjects.length === 0) {
+        return [];
+    }
+
+    const projectIds = userProjects.map(p => p.projectId);
+
+    // Find daily updates for these projects with the given status
+    const statusEnum = status as DailyUpdateStatus;
+
+    const dailyUpdates = await prisma.dailyUpdate.findMany({
+        where: {
+            projectId: { in: projectIds },
+            status: statusEnum
+        },
+        orderBy: { createdAt: "desc" },
+        include: {
+            project: {
+                select: {
+                    projectName: true,
+                    location: true
+                }
+            }
+        }
+    });
+
+    return dailyUpdates;
+};
+
+// Approve a daily update (Customer)
+export const approveDailyUpdate = async (dailyUpdateId: string, userId: string) => {
+    // Check if the daily update belongs to a project owned by the user
+    const dailyUpdate = await prisma.dailyUpdate.findUnique({
+        where: { dailyUpdateId },
+        include: { project: true }
+    });
+
+    if (!dailyUpdate) {
+        throw new Error("Daily update not found");
+    }
+
+    if (!dailyUpdate.project || dailyUpdate.project.userId !== userId) {
+        throw new Error("Unauthorized: You can only approve updates for your own projects");
+    }
+
+    const updatedDailyUpdate = await prisma.dailyUpdate.update({
+        where: { dailyUpdateId },
+        data: {
+            status: DailyUpdateStatus.approved,
+            updatedAt: new Date()
+        }
+    });
+
+    return updatedDailyUpdate;
+};
+
+// Reject a daily update (Customer)
+export const rejectDailyUpdate = async (dailyUpdateId: string, userId: string) => {
+    // Check if the daily update belongs to a project owned by the user
+    const dailyUpdate = await prisma.dailyUpdate.findUnique({
+        where: { dailyUpdateId },
+        include: { project: true }
+    });
+
+    if (!dailyUpdate) {
+        throw new Error("Daily update not found");
+    }
+
+    if (!dailyUpdate.project || dailyUpdate.project.userId !== userId) {
+        throw new Error("Unauthorized: You can only reject updates for your own projects");
+    }
+
+    const updatedDailyUpdate = await prisma.dailyUpdate.update({
+        where: { dailyUpdateId },
+        data: {
+            status: DailyUpdateStatus.rejected,
+            updatedAt: new Date()
+        }
+    });
+
+    return updatedDailyUpdate;
+};

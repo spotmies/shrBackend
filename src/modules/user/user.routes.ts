@@ -10,6 +10,11 @@ router.get("/", UserController.getAllUsers);
 // Create a new user (Admin only)
 router.post("/", adminAuthMiddleware, UserController.createUser);
 
+// Admin Account Settings - Must come before /:userId routes
+router.get("/admin/settings", adminAuthMiddleware, UserController.getAdminSettings);
+router.put("/admin/settings", adminAuthMiddleware, UserController.updateAdminSettings);
+router.post("/admin/change-password", adminAuthMiddleware, UserController.changeAdminPassword);
+
 // Get user by ID
 router.get("/:userId", UserController.getuserById);
 

@@ -40,4 +40,3 @@ router.delete("/:documentId", adminAuthMiddleware, DocumentController.deleteDocu
 
 module.exports = router;
 
-

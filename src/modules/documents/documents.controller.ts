@@ -6,6 +6,10 @@ interface MulterRequest extends Request {
         email: string;
         role: string;
     };
+    file?: Express.Multer.File;
+    files?: {
+        [fieldname: string]: Express.Multer.File[];
+    } | Express.Multer.File[];
 }
 
 /**
@@ -648,12 +652,25 @@ exports.downloadDocument = async (req: Request, res: Response) => {
         const documentId = req.params.documentId;
         const documentFile = await DocumentServices.getDocumentFile(documentId);
 
-        // Set headers for file download
-        res.setHeader('Content-Type', documentFile.fileType);
-        res.setHeader('Content-Disposition', `attachment; filename="${documentFile.fileName}"`);
+        // If we have a fileUrl (Supabase), redirect to it or return it
+        if (documentFile.fileUrl) {
+            return res.redirect(documentFile.fileUrl);
+            // Alternatively, return JSON with URL:
+            // return res.status(200).json({ success: true,  data: { fileUrl: documentFile.fileUrl } });
+        }
 
-        // Send file buffer
-        return res.status(200).send(documentFile.fileData);
+        // Fallback for legacy files stored in DB (buffer)
+        if (documentFile.fileData && documentFile.fileData.length > 0) {
+            res.setHeader('Content-Type', documentFile.fileType);
+            res.setHeader('Content-Disposition', `attachment; filename="${documentFile.fileName}"`);
+            return res.status(200).send(documentFile.fileData);
+        }
+
+        return res.status(404).json({
+            success: false,
+            message: "File content not found"
+        });
+
     } catch (error) {
         return res.status(400).json({
             success: false,

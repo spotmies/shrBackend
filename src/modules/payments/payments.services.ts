@@ -1,25 +1,41 @@
 ﻿import prisma from "../../config/prisma.client";
-import { PaymentMethod, PaymentStatus, Prisma } from "@prisma/client";
+import { PaymentMethod, PaymentStatus, PaymentType, Prisma } from "@prisma/client";
 
-export const createPayment = async (data:
-    {
-        amount: number,
-        projectId: string,
-        paymentStatus: string,
-        paymentMethod: string,
-        paymentDate: Date,
-        remarks?: string | null,
-        createdAt: Date,
-        updatedAt: Date
-    }) => {
+export const createPayment = async (data: {
+    amount: number,
+    projectId: string,
+    paymentStatus: string,
+    paymentType?: string,
+    paymentMethod: string,
+    paymentBreakup?: any[],
+    paymentDate: Date | string,
+    remarks?: string | null,
+}) => {
+
+    // Validate MultiMode payment
+    if (data.paymentType === PaymentType.MultiMode) {
+        const breakup = data.paymentBreakup;
+        if (!breakup || !Array.isArray(breakup) || breakup.length === 0) {
+            throw new Error("Payment breakup is required for MultiMode payments");
+        }
+
+        const totalBreakup = breakup.reduce((sum: number, item: any) => sum + (parseFloat(item.amount) || 0), 0);
+
+        // Allow for small floating point differences
+        if (Math.abs(totalBreakup - data.amount) > 0.01) {
+            throw new Error(`Total breakup amount (${totalBreakup}) must match the payment amount (${data.amount})`);
+        }
+    }
 
     const newPayment = await prisma.payment.create({
         data: {
             amount: data.amount,
             projectId: data.projectId,
             paymentStatus: data.paymentStatus as PaymentStatus,
+            paymentType: (data.paymentType as PaymentType) || PaymentType.Standard,
             paymentMethod: data.paymentMethod as PaymentMethod,
-            paymentDate: data.paymentDate,
+            paymentBreakup: data.paymentBreakup || [],
+            paymentDate: new Date(data.paymentDate),
             remarks: data.remarks || null,
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -59,8 +75,10 @@ export const updatePayment = async (paymentId: string, updateData: {
     amount?: number,
     projectId?: string,
     paymentStatus?: string,
+    paymentType?: string,
     paymentMethod?: string,
-    paymentDate?: Date,
+    paymentBreakup?: any[],
+    paymentDate?: Date | string,
     remarks?: string | null,
     updatedAt?: Date
 }) => {
@@ -70,6 +88,26 @@ export const updatePayment = async (paymentId: string, updateData: {
         throw new Error("Payment not found");
     }
 
+    // Validate MultiMode if being updated
+    const isMultiMode = updateData.paymentType === PaymentType.MultiMode || (updateData.paymentType === undefined && payment.paymentType === PaymentType.MultiMode);
+
+    if (isMultiMode && (updateData.amount !== undefined || updateData.paymentBreakup !== undefined)) {
+        const amount = updateData.amount !== undefined ? updateData.amount : parseFloat(payment.amount.toString());
+        const breakup = updateData.paymentBreakup !== undefined ? updateData.paymentBreakup : (payment.paymentBreakup as any[]);
+
+        if (!breakup || !Array.isArray(breakup) || breakup.length === 0) {
+            // Only throw if switching to MultiMode without providing breakup, or if existing breakup is empty
+            if (updateData.paymentType === PaymentType.MultiMode) {
+                throw new Error("Payment breakup is required for MultiMode payments");
+            }
+        } else {
+            const totalBreakup = breakup.reduce((sum: number, item: any) => sum + (parseFloat(item.amount) || 0), 0);
+            if (Math.abs(totalBreakup - amount) > 0.01) {
+                throw new Error(`Total breakup amount (${totalBreakup}) must match the payment amount (${amount})`);
+            }
+        }
+    }
+
     const dataToUpdate: Prisma.PaymentUpdateInput = {
         updatedAt: new Date(),
     };
@@ -77,8 +115,10 @@ export const updatePayment = async (paymentId: string, updateData: {
     if (updateData.amount !== undefined) dataToUpdate.amount = updateData.amount;
     if (updateData.projectId !== undefined) dataToUpdate.project = { connect: { projectId: updateData.projectId } };
     if (updateData.paymentStatus !== undefined) dataToUpdate.paymentStatus = updateData.paymentStatus as PaymentStatus;
+    if (updateData.paymentType !== undefined) dataToUpdate.paymentType = updateData.paymentType as PaymentType;
     if (updateData.paymentMethod !== undefined) dataToUpdate.paymentMethod = updateData.paymentMethod as PaymentMethod;
-    if (updateData.paymentDate !== undefined) dataToUpdate.paymentDate = updateData.paymentDate;
+    if (updateData.paymentBreakup !== undefined) dataToUpdate.paymentBreakup = updateData.paymentBreakup;
+    if (updateData.paymentDate !== undefined) dataToUpdate.paymentDate = new Date(updateData.paymentDate);
     if (updateData.remarks !== undefined) dataToUpdate.remarks = updateData.remarks;
 
     const updatedPayment = await prisma.payment.update({

@@ -62,20 +62,20 @@ exports.adminOrSupervisorAuthMiddleware = async (req: AuthRequest, res: Response
 
         // For supervisor, get user from database to get userId
         if (decoded.role === "supervisor") {
-            const user = await prisma.user.findFirst({
+            const supervisor = await prisma.supervisor.findFirst({
                 where: { email: decoded.email }
             });
 
-            if (!user) {
+            if (!supervisor) {
                 return res.status(401).json({
                     success: false,
-                    message: "User not found. Please login again."
+                    message: "Supervisor account not found."
                 });
             }
 
             // Attach user info to request object
             req.user = {
-                userId: user.userId,
+                userId: supervisor.supervisorId,
                 email: decoded.email,
                 role: decoded.role
             };

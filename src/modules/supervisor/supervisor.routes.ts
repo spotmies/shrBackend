@@ -2,6 +2,7 @@
 const router = express.Router();
 const SupervisorController = require("./supervisor.controller");
 const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware");
+const { supervisorAuthMiddleware } = require("../../middleware/supervisorAuth.middleware");
 
 // Get all supervisors
 router.get("/", SupervisorController.getAllSupervisors);
@@ -14,6 +15,12 @@ router.post("/:supervisorId/assign-project", adminAuthMiddleware, SupervisorCont
 
 // Remove project from supervisor (Admin only) - Must come before /:supervisorId route
 router.delete("/:supervisorId/remove-project", adminAuthMiddleware, SupervisorController.removeProjectFromSupervisor);
+
+// Get my profile (Authenticated Supervisor) - Must come before /:supervisorId route
+router.get("/profile", supervisorAuthMiddleware, SupervisorController.getProfile);
+
+// Update my profile (Authenticated Supervisor) - Must come before /:supervisorId route
+router.put("/profile", supervisorAuthMiddleware, SupervisorController.updateProfile);
 
 // Get assigned projects count for supervisor - Must come before /:supervisorId route
 router.get("/:supervisorId/assigned-projects-count", SupervisorController.getAssignedProjectsCount);

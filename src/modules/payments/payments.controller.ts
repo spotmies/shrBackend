@@ -1,4 +1,4 @@
-﻿import type { Request,Response} from "express";
+﻿import type { Request, Response } from "express";
 const PaymentServices = require("./payments.services");
 
 /**
@@ -15,7 +15,7 @@ const PaymentServices = require("./payments.services");
  *         application/json:
  *           schema:
  *             type: object
- *             required: ["amount", "projectId", "paymentStatus", "paymentMethod", "paymentDate"]
+ *             required: ["amount", "projectId", "paymentStatus", "paymentDate"]
  *             properties:
  *               amount:
  *                 type: number
@@ -33,10 +33,27 @@ const PaymentServices = require("./payments.services");
  *                 type: string
  *                 enum: ["pending", "completed", "failed", "refunded"]
  *                 example: "pending"
+ *               paymentType:
+ *                 type: string
+ *                 enum: ["Standard", "MultiMode"]
+ *                 example: "Standard"
+ *                 description: Mode of payment
  *               paymentMethod:
  *                 type: string
- *                 enum: ["cash", "card", "bank_transfer", "cheque", "online"]
+ *                 enum: ["cash", "card", "bank_transfer", "cheque", "online", "UPI"]
  *                 example: "cash"
+ *                 description: Required for Standard mode
+ *               paymentBreakup:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     amount:
+ *                       type: number
+ *                     method:
+ *                       type: string
+ *                       enum: ["cash", "card", "bank_transfer", "cheque", "online", "UPI"]
+ *                 description: Required for MultiMode. List of partial payments.
  *               paymentDate:
  *                 type: string
  *                 format: date
@@ -64,8 +81,12 @@ const PaymentServices = require("./payments.services");
  *                           format: uuid
  *                         paymentStatus:
  *                           type: string
+ *                         paymentType:
+ *                           type: string
  *                         paymentMethod:
  *                           type: string
+ *                         paymentBreakup:
+ *                           type: array
  *                         paymentDate:
  *                           type: string
  *                           format: date
@@ -76,24 +97,23 @@ const PaymentServices = require("./payments.services");
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-
 //post
-exports.createPayment = async(req: Request,res: Response)=>{
-    try{
+exports.createPayment = async (req: Request, res: Response) => {
+    try {
 
         const paymentData = await PaymentServices.createPayment(req.body);
 
         return res.status(201).json({
-            success:true,
-            message:"Payment created successfully",
-            data:paymentData,
+            success: true,
+            message: "Payment created successfully",
+            data: paymentData,
         });
 
-    }catch(error){
+    } catch (error) {
         return res.status(400).json({
-            success:false,
-            message:error instanceof Error ? error.message : String(error),
-            
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+
         });
     }
 
@@ -136,8 +156,12 @@ exports.createPayment = async(req: Request,res: Response)=>{
  *                           format: uuid
  *                         paymentStatus:
  *                           type: string
+ *                         paymentType:
+ *                           type: string
  *                         paymentMethod:
  *                           type: string
+ *                         paymentBreakup:
+ *                           type: array
  *                         paymentDate:
  *                           type: string
  *                           format: date
@@ -149,20 +173,20 @@ exports.createPayment = async(req: Request,res: Response)=>{
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //getId
-exports.getPaymentById = async(req:Request,res:Response)=>{
-    try{
+exports.getPaymentById = async (req: Request, res: Response) => {
+    try {
         const paymentId = req.params.paymentId;
         const payment = await PaymentServices.getPaymentByPaymentId(paymentId);
 
         return res.status(200).json({
-            success:true,
-            message:"Payment fetched successfully",
-            data:payment,
+            success: true,
+            message: "Payment fetched successfully",
+            data: payment,
         })
-    }catch(error){
+    } catch (error) {
         return res.status(400).json({
-            success:false,
-            message:error instanceof Error ? error.message: String(error),
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
         })
     }
 }
@@ -199,6 +223,8 @@ exports.getPaymentById = async(req:Request,res:Response)=>{
  *                             format: uuid
  *                           paymentStatus:
  *                             type: string
+ *                           paymentType:
+ *                             type: string
  *                           paymentMethod:
  *                             type: string
  *                           paymentDate:
@@ -212,19 +238,19 @@ exports.getPaymentById = async(req:Request,res:Response)=>{
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //get
-exports.getAllPayments = async(req:Request,res:Response)=>{
-    try{
-          const payments = await PaymentServices.getAllThePayments();
+exports.getAllPayments = async (req: Request, res: Response) => {
+    try {
+        const payments = await PaymentServices.getAllThePayments();
 
-          return res.status(200).json({
-            success:true,
-            message:"Payments fetched successfully",
-            data:payments
-          })
-    }catch(error){
+        return res.status(200).json({
+            success: true,
+            message: "Payments fetched successfully",
+            data: payments
+        })
+    } catch (error) {
         return res.status(400).json({
-            success:false,
-            message:error instanceof Error ? error.message: String(error),
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
         })
     }
 }
@@ -269,10 +295,24 @@ exports.getAllPayments = async(req:Request,res:Response)=>{
  *                 type: string
  *                 enum: ["pending", "completed", "failed", "refunded"]
  *                 example: "completed"
+ *               paymentType:
+ *                 type: string
+ *                 enum: ["Standard", "MultiMode"]
+ *                 example: "Standard"
  *               paymentMethod:
  *                 type: string
- *                 enum: ["cash", "card", "bank_transfer", "cheque", "online"]
+ *                 enum: ["cash", "card", "bank_transfer", "cheque", "online", "UPI"]
  *                 example: "card"
+ *               paymentBreakup:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     amount:
+ *                       type: number
+ *                     method:
+ *                       type: string
+ *                       enum: ["cash", "card", "bank_transfer", "cheque", "online", "UPI"]
  *               paymentDate:
  *                 type: string
  *                 format: date
@@ -313,21 +353,21 @@ exports.getAllPayments = async(req:Request,res:Response)=>{
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //put
-exports.updatePayment = async(req:Request , res:Response)=>{
-    try{
+exports.updatePayment = async (req: Request, res: Response) => {
+    try {
         const paymentId = req.params.paymentId;
 
         const updatedData = await PaymentServices.updatePayment(paymentId, req.body);
 
         return res.status(200).json({
-            success:true,
-            message:"Payment updated successfully",
-            data:updatedData,
+            success: true,
+            message: "Payment updated successfully",
+            data: updatedData,
         })
-    }catch(error){
+    } catch (error) {
         return res.status(400).json({
-            success:false,
-            message:error instanceof Error ? error.message : String(error),
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
         })
     }
 }
@@ -374,19 +414,19 @@ exports.updatePayment = async(req:Request , res:Response)=>{
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //delete
-exports.deletePayment = async(req:Request,res:Response)=>{
-    try{
+exports.deletePayment = async (req: Request, res: Response) => {
+    try {
         const paymentId = req.params.paymentId;
         const deletedData = await PaymentServices.deletePayment(paymentId)
         return res.status(200).json({
-            success:true,
-            message:"Payment deleted successfully",
-            data:deletedData,
+            success: true,
+            message: "Payment deleted successfully",
+            data: deletedData,
         })
-    }catch(error){
+    } catch (error) {
         return res.status(400).json({
-            success:false,
-            message:error instanceof Error ? error.message: String(error),
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
         })
     }
 }
@@ -438,18 +478,18 @@ exports.deletePayment = async(req:Request,res:Response)=>{
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //get budget summary
-exports.getBudgetSummary = async(req:Request,res:Response)=>{
-    try{
+exports.getBudgetSummary = async (req: Request, res: Response) => {
+    try {
         const budgetSummary = await PaymentServices.getBudgetSummary();
         return res.status(200).json({
-            success:true,
-            message:"Budget summary fetched successfully",
-            data:budgetSummary,
+            success: true,
+            message: "Budget summary fetched successfully",
+            data: budgetSummary,
         })
-    }catch(error){
+    } catch (error) {
         return res.status(400).json({
-            success:false,
-            message:error instanceof Error ? error.message: String(error),
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
         })
     }
 }
@@ -518,22 +558,23 @@ exports.getBudgetSummary = async(req:Request,res:Response)=>{
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //get budget summary by project
-exports.getBudgetSummaryByProject = async(req:Request,res:Response)=>{
-    try{
+exports.getBudgetSummaryByProject = async (req: Request, res: Response) => {
+    try {
         const projectId = req.params.projectId;
         const budgetSummary = await PaymentServices.getBudgetSummaryByProject(projectId);
         return res.status(200).json({
-            success:true,
-            message:"Budget summary fetched successfully",
-            data:budgetSummary,
+            success: true,
+            message: "Budget summary fetched successfully",
+            data: budgetSummary,
         })
-    }catch(error){
+    } catch (error) {
         return res.status(400).json({
-            success:false,
-            message:error instanceof Error ? error.message: String(error),
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
         })
     }
 }
+
 
 
 

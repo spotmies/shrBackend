@@ -1,6 +1,19 @@
 ﻿import prisma from "../../config/prisma.client";
 import { ProjectStatus, ProjectType, Prisma } from "@prisma/client";
 
+// Helper function to parse date strings to Date objects
+const parseDate = (dateInput: string | Date): Date => {
+    if (dateInput instanceof Date) {
+        return dateInput;
+    }
+    // If it's a date string like "2024-01-15", convert to full ISO date
+    const date = new Date(dateInput);
+    if (isNaN(date.getTime())) {
+        throw new Error(`Invalid date format: ${dateInput}`);
+    }
+    return date;
+};
+
 // Create a new project
 export const createProject = async (data:
     {
@@ -8,15 +21,15 @@ export const createProject = async (data:
         projectType: string,
         location: string,
         initialStatus: string,
-        startDate: Date,
-        expectedCompletion: Date,
+        startDate: string | Date,
+        expectedCompletion: string | Date,
         totalBudget: number,
-        materialName: string,
-        quantity: number,
-        notes: string,
+        materialName?: string,
+        quantity?: number,
+        notes?: string,
         userId: string,
-        createdAt: Date,
-        updatedAt: Date
+        createdAt?: Date,
+        updatedAt?: Date
     }) => {
 
     const newProject = await prisma.project.create({
@@ -25,12 +38,12 @@ export const createProject = async (data:
             projectType: data.projectType as ProjectType,
             location: data.location,
             initialStatus: data.initialStatus as ProjectStatus,
-            startDate: data.startDate,
-            expectedCompletion: data.expectedCompletion,
+            startDate: parseDate(data.startDate),
+            expectedCompletion: parseDate(data.expectedCompletion),
             totalBudget: data.totalBudget,
-            materialName: data.materialName,
-            quantity: data.quantity,
-            notes: data.notes,
+            materialName: data.materialName || "",
+            quantity: data.quantity || 0,
+            notes: data.notes || "",
             userId: data.userId,
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -71,15 +84,20 @@ export const updateProject = async (projectId: string, updateData: {
     projectType?: string,
     location?: string,
     initialStatus?: string,
-    startDate?: Date,
-    expectedCompletion?: Date,
+    startDate?: string | Date,
+    expectedCompletion?: string | Date,
     totalBudget?: number,
     materialName?: string,
     quantity?: number,
     notes?: string,
     userId?: string,
     updatedAt?: Date
-}) => {
+} | undefined | null) => {
+    // Check if updateData is provided
+    if (!updateData || Object.keys(updateData).length === 0) {
+        throw new Error("No update data provided. Please provide at least one field to update.");
+    }
+
     const project = await prisma.project.findUnique({ where: { projectId } });
 
     if (!project) {
@@ -94,8 +112,8 @@ export const updateProject = async (projectId: string, updateData: {
     if (updateData.projectType !== undefined) dataToUpdate.projectType = updateData.projectType as ProjectType;
     if (updateData.location !== undefined) dataToUpdate.location = updateData.location;
     if (updateData.initialStatus !== undefined) dataToUpdate.initialStatus = updateData.initialStatus as ProjectStatus;
-    if (updateData.startDate !== undefined) dataToUpdate.startDate = updateData.startDate;
-    if (updateData.expectedCompletion !== undefined) dataToUpdate.expectedCompletion = updateData.expectedCompletion;
+    if (updateData.startDate !== undefined) dataToUpdate.startDate = parseDate(updateData.startDate);
+    if (updateData.expectedCompletion !== undefined) dataToUpdate.expectedCompletion = parseDate(updateData.expectedCompletion);
     if (updateData.totalBudget !== undefined) dataToUpdate.totalBudget = updateData.totalBudget;
     if (updateData.materialName !== undefined) dataToUpdate.materialName = updateData.materialName;
     if (updateData.quantity !== undefined) dataToUpdate.quantity = updateData.quantity;

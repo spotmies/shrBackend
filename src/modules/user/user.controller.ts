@@ -90,22 +90,22 @@ exports.createUser = async (req: Request, res: Response) => {
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //GETBYID
-exports.getuserById = async(req:Request,res:Response)=>{
-   try{
-          const userId = req.params.userId
-          const user = await UserServices.getUserById(userId);
+exports.getuserById = async (req: Request, res: Response) => {
+    try {
+        const userId = req.params.userId
+        const user = await UserServices.getUserById(userId);
 
-          return res.status(200).json({
-                success:true,
-                message: "User fetched successfully",
-                data:user
-          })
-   }catch(error){
-       return res.status(400).json({
-        success:false,
-        message:error instanceof Error ? error.message : String(error),
-       })
-   }
+        return res.status(200).json({
+            success: true,
+            message: "User fetched successfully",
+            data: user
+        })
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        })
+    }
 
 }
 
@@ -137,19 +137,19 @@ exports.getuserById = async(req:Request,res:Response)=>{
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //GETALL
-exports.getAllUsers = async(req:Request,res:Response)=>{
-    try{
+exports.getAllUsers = async (req: Request, res: Response) => {
+    try {
         const users = await UserServices.getAllUsers();
-       return res.status(200).json({
-        success:true,
-        message: "Users feched successfully",
-        data:users
-       })
+        return res.status(200).json({
+            success: true,
+            message: "Users feched successfully",
+            data: users
+        })
 
-    }catch(error){
+    } catch (error) {
         return res.status(400).json({
-            success:false,
-            message:error instanceof Error ? error.message : String(error),
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
         })
     }
 }
@@ -226,21 +226,21 @@ exports.getAllUsers = async(req:Request,res:Response)=>{
  *         description: Forbidden - Admin privileges required
  */
 //PUT
-exports.updateUser = async(req:Request, res:Response)=>{
-    try{
+exports.updateUser = async (req: Request, res: Response) => {
+    try {
         const userId = req.params.userId;
 
         const updatedUserData = await UserServices.updateUser(userId, req.body);
 
         return res.status(200).json({
-             success:true,
-             message:"User updated successfully",
-             data:updatedUserData
+            success: true,
+            message: "User updated successfully",
+            data: updatedUserData
         })
-    }catch(error){
+    } catch (error) {
         return res.status(400).json({
-            success:false,
-            message:error instanceof Error ? error.message : String(error),
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
         })
     }
 }
@@ -285,21 +285,21 @@ exports.updateUser = async(req:Request, res:Response)=>{
  *         description: Forbidden - Admin privileges required
  */
 //DELETE
-exports.deleteUser = async(req:Request,res:Response)=>{
-    try{
+exports.deleteUser = async (req: Request, res: Response) => {
+    try {
         const userId = req.params.userId;
 
         const deletedUserData = await UserServices.deleteUser(userId);
 
         return res.status(200).json({
-            success:true,
-            message:"User deleted successfully",
-            data:deletedUserData
+            success: true,
+            message: "User deleted successfully",
+            data: deletedUserData
         })
-    }catch(error){
+    } catch (error) {
         return res.status(404).json({
-            success:false,
-            message:error instanceof Error ? error.message: String(error),
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
         })
     }
 }
@@ -683,6 +683,148 @@ exports.rejectSupervisor = async (req: Request, res: Response) => {
             success: true,
             message: "Supervisor rejected successfully",
             data: supervisor
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+interface AuthRequest extends Request {
+    user?: {
+        userId: string;
+        email: string;
+        role: string;
+    };
+}
+
+/**
+ * @swagger
+ * /api/user/admin/settings:
+ *   get:
+ *     summary: Get admin account settings
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Admin settings fetched successfully
+ *       401:
+ *         description: Unauthorized
+ */
+exports.getAdminSettings = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        const user = await UserServices.getUserById(userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Admin settings fetched successfully",
+            data: user
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/admin/settings:
+ *   put:
+ *     summary: Update admin account settings
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *               companyName:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Admin settings updated successfully
+ */
+exports.updateAdminSettings = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        const updatedUser = await UserServices.updateUser(userId, req.body);
+
+        return res.status(200).json({
+            success: true,
+            message: "Admin settings updated successfully",
+            data: updatedUser
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/admin/change-password:
+ *   post:
+ *     summary: Change admin password
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: ["currentPassword", "newPassword", "confirmNewPassword"]
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *               confirmNewPassword:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Password updated successfully
+ */
+exports.changeAdminPassword = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        const { currentPassword, newPassword, confirmNewPassword } = req.body;
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        if (newPassword !== confirmNewPassword) {
+            return res.status(400).json({ success: false, message: "New passwords do not match" });
+        }
+
+        const result = await UserServices.changePassword(userId, currentPassword, newPassword);
+
+        return res.status(200).json({
+            success: true,
+            message: result.message,
+            data: {}
         });
     } catch (error) {
         return res.status(400).json({

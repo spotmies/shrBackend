@@ -18,7 +18,7 @@ export class DocumentEntity {
   @Column({ type: "enum", enum: ["Agreement", "plans", "permit", "others"], default: "Agreement" })
   documentType!: string;
 
-  @Column({ type: "bytea", nullable: false })
+  @Column({ type: "bytea", nullable: true })
   fileData!: Buffer;
 
   @Column({ type: "varchar", length: 255, nullable: false })
@@ -26,6 +26,9 @@ export class DocumentEntity {
 
   @Column({ type: "varchar", length: 100, nullable: false })
   fileType!: string;
+
+  @Column({ type: "text", nullable: true })
+  fileUrl!: string;
 
   @Column({ type: "varchar", length: 500, nullable: true })
   description!: string | null;

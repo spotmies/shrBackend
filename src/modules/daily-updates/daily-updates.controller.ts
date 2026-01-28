@@ -8,6 +8,14 @@ interface MulterRequest extends Omit<Request, "file" | "files"> {
     } | Express.Multer.File[];
 }
 
+interface RequestWithUser extends Request {
+    user?: {
+        userId: string;
+        email: string;
+        role: string;
+    }
+}
+
 /**
  * @swagger
  * /api/daily-updates:
@@ -445,6 +453,135 @@ export const downloadVideo = async (req: Request, res: Response) => {
         return res.status(404).json({
             success: false,
             message: "No video URL found for this daily update"
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/daily-updates/user/status/{status}:
+ *   get:
+ *     summary: Get daily updates by status for the logged-in user
+ *     tags: [Daily Updates]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: status
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: ["pending", "approved", "rejected"]
+ *     responses:
+ *       200:
+ *         description: Daily updates fetched successfully
+ */
+export const getDailyUpdatesByStatusForUser = async (req: RequestWithUser, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        const status = req.params.status as string;
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized: User ID not found" });
+        }
+
+        const dailyUpdates = await DailyUpdatesServices.getDailyUpdatesByStatusForUser(userId, status);
+
+        return res.status(200).json({
+            success: true,
+            message: `Daily updates with status '${status}' fetched successfully`,
+            data: dailyUpdates,
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/daily-updates/{dailyUpdateId}/approve:
+ *   put:
+ *     summary: Approve a daily update (Customer)
+ *     tags: [Daily Updates]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: dailyUpdateId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Daily update approved successfully
+ */
+export const approveDailyUpdate = async (req: RequestWithUser, res: Response) => {
+    try {
+        const dailyUpdateId = req.params.dailyUpdateId as string;
+        const userId = req.user?.userId;
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized: User ID not found" });
+        }
+
+        const approvedUpdate = await DailyUpdatesServices.approveDailyUpdate(dailyUpdateId, userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Daily update approved successfully",
+            data: approvedUpdate,
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/daily-updates/{dailyUpdateId}/reject:
+ *   put:
+ *     summary: Reject a daily update (Customer)
+ *     tags: [Daily Updates]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: dailyUpdateId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Daily update rejected successfully
+ */
+export const rejectDailyUpdate = async (req: RequestWithUser, res: Response) => {
+    try {
+        const dailyUpdateId = req.params.dailyUpdateId as string;
+        const userId = req.user?.userId;
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized: User ID not found" });
+        }
+
+        const rejectedUpdate = await DailyUpdatesServices.rejectDailyUpdate(dailyUpdateId, userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Daily update rejected successfully",
+            data: rejectedUpdate,
         });
     } catch (error) {
         return res.status(400).json({

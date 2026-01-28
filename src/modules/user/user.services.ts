@@ -11,6 +11,7 @@ export const createUser = async (data: {
     contact: string;
     estimatedInvestment?: number | null;
     notes?: string | null;
+    companyName?: string | null;
     createdAt: Date;
     updatedAt: Date;
 }) => {
@@ -37,6 +38,7 @@ export const createUser = async (data: {
             contact: data.contact,
             estimatedInvestment: data.estimatedInvestment || null,
             notes: data.notes || null,
+            companyName: data.companyName || null,
             createdAt: new Date(),
             updatedAt: new Date(),
         }
@@ -80,6 +82,7 @@ export const updateUser = async (userId: string, updatedUserData: {
     contact?: string;
     estimatedInvestment?: number | null;
     notes?: string | null;
+    companyName?: string | null;
     createdAt?: Date;
     updatedAt?: Date;
 }) => {
@@ -100,6 +103,7 @@ export const updateUser = async (userId: string, updatedUserData: {
     if (updatedUserData.contact !== undefined) dataToUpdate.contact = updatedUserData.contact;
     if (updatedUserData.estimatedInvestment !== undefined) dataToUpdate.estimatedInvestment = updatedUserData.estimatedInvestment;
     if (updatedUserData.notes !== undefined) dataToUpdate.notes = updatedUserData.notes;
+    if (updatedUserData.companyName !== undefined) dataToUpdate.companyName = updatedUserData.companyName;
 
     // Handle password update (hash if provided)
     if (updatedUserData.password !== undefined) {
@@ -233,4 +237,38 @@ export const rejectSupervisor = async (userId: string) => {
     // Remove password from response
     const { password: _, ...supervisorWithoutPassword } = updatedSupervisor;
     return supervisorWithoutPassword;
+};
+
+// Change password
+export const changePassword = async (userId: string, currentPassword: string, newPassword: string) => {
+    const user = await prisma.user.findUnique({ where: { userId } });
+
+    if (!user) {
+        throw new Error("User not found");
+    }
+
+    // Verify current password
+    if (!user.password && currentPassword) {
+        throw new Error("User does not have a password set");
+    }
+
+    if (user.password) {
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            throw new Error("Current password is incorrect");
+        }
+    }
+
+    // Update with new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+        where: { userId },
+        data: {
+            password: hashedPassword,
+            updatedAt: new Date()
+        }
+    });
+
+    return { success: true, message: "Password updated successfully" };
 };
