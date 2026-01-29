@@ -4,6 +4,13 @@ const SupervisorController = require("./supervisor.controller");
 const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware");
 const { supervisorAuthMiddleware } = require("../../middleware/supervisorAuth.middleware");
 
+/**
+ * @swagger
+ * tags:
+ *   - name: Supervisors
+ *     description: Supervisor management endpoints
+ */
+
 // Get all supervisors
 router.get("/", SupervisorController.getAllSupervisors);
 
@@ -21,6 +28,9 @@ router.get("/profile", supervisorAuthMiddleware, SupervisorController.getProfile
 
 // Update my profile (Authenticated Supervisor) - Must come before /:supervisorId route
 router.put("/profile", supervisorAuthMiddleware, SupervisorController.updateProfile);
+
+// Get my assigned projects (Authenticated Supervisor) - Must come before /:supervisorId route
+router.get("/my-projects", supervisorAuthMiddleware, SupervisorController.getMyAssignedProjects);
 
 // Get assigned projects count for supervisor - Must come before /:supervisorId route
 router.get("/:supervisorId/assigned-projects-count", SupervisorController.getAssignedProjectsCount);

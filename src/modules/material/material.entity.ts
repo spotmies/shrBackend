@@ -37,6 +37,9 @@ class MaterialEntity {
     @Column({ type: "text", nullable: true })
     notes!: string | null;
 
+    @Column({ type: "varchar", length: 255, nullable: true })
+    vendor!: string | null;
+
     @CreateDateColumn({ name: "created_at" })
     createdAt!: Date;
 

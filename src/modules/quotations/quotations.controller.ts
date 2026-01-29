@@ -47,6 +47,10 @@ interface MulterRequest extends Request {
  *                 type: string
  *                 format: uuid
  *                 example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
+ *               customerName:
+ *                 type: string
+ *                 example: "John Doe"
+ *                 description: Name of the customer
  *               file:
  *                 type: string
  *                 format: binary
@@ -79,6 +83,8 @@ interface MulterRequest extends Request {
  *                         projectId:
  *                           type: string
  *                           format: uuid
+ *                         customerName:
+ *                           type: string
  *                         fileName:
  *                           type: string
  *                         fileType:
@@ -153,11 +159,27 @@ exports.createQuotation = async (req: MulterRequest, res: Response) => {
             }
         }
 
+        // Parse date if provided
+        let dateVal: Date | undefined | null = undefined;
+        if (req.body.date) {
+            const parsedDate = new Date(req.body.date);
+            if (!isNaN(parsedDate.getTime())) {
+                dateVal = parsedDate;
+            } else {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid date format"
+                });
+            }
+        }
+
         // Prepare quotation data
         const quotationData = {
             ...req.body,
+            date: dateVal,
             lineItems: lineItems,
-            totalAmount: req.body.totalAmount ? parseFloat(String(req.body.totalAmount)) : 0
+            totalAmount: req.body.totalAmount ? parseFloat(String(req.body.totalAmount)) : 0,
+            customerName: req.body.customerName || null
         };
 
         const createdQuotation = await QuotationServices.createQuotation(quotationData, file || undefined);
@@ -218,6 +240,8 @@ exports.createQuotation = async (req: MulterRequest, res: Response) => {
  *                         projectId:
  *                           type: string
  *                           format: uuid
+ *                         customerName:
+ *                           type: string
  *       400:
  *         description: Bad request - Quotation not found
  *         content:
@@ -327,6 +351,8 @@ exports.getAllQuotations = async (req: Request, res: Response) => {
  *     summary: Update a quotation (partial update)
  *     description: Update one or more fields of an existing quotation. All fields are optional - only include the fields you want to update.
  *     tags: [Quotations]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: quotationId
@@ -370,6 +396,10 @@ exports.getAllQuotations = async (req: Request, res: Response) => {
  *                 format: uuid
  *                 description: The project ID associated with the quotation
  *                 example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
+ *               customerName:
+ *                 type: string
+ *                 example: "John Doe"
+ *                 description: Name of the customer (optional update)
  *               file:
  *                 type: string
  *                 format: binary
@@ -420,6 +450,10 @@ exports.getAllQuotations = async (req: Request, res: Response) => {
  *                           format: uuid
  *                           nullable: true
  *                           description: Associated project ID
+ *                         customerName:
+ *                           type: string
+ *                           nullable: true
+ *                           description: Associated customer name
  *                         fileName:
  *                           type: string
  *                           nullable: true
@@ -473,6 +507,10 @@ exports.updateQuotation = async (req: MulterRequest, res: Response) => {
             if (validStatuses.includes(req.body.status)) {
                 updateData.status = req.body.status;
             }
+        }
+
+        if (req.body.customerName !== undefined && req.body.customerName !== null && req.body.customerName !== '') {
+            updateData.customerName = req.body.customerName;
         }
 
         // Parse lineItems from JSON string if provided
@@ -561,10 +599,67 @@ exports.updateQuotation = async (req: MulterRequest, res: Response) => {
 
 /**
  * @swagger
+ * /api/quotations/{quotationId}/total-amount:
+ *   get:
+ *     summary: Get the total amount of a specific quotation
+ *     tags: [Quotations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: quotationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The quotation ID
+ *     responses:
+ *       200:
+ *         description: Total amount fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     totalAmount:
+ *                       type: number
+ *                       example: 50000.00
+ *       400:
+ *         description: Bad request - Quotation not found
+ */
+exports.getQuotationTotalAmount = async (req: Request, res: Response) => {
+    try {
+        const quotationId = req.params.quotationId as string;
+        const totalAmount = await QuotationServices.getQuotationTotalAmount(quotationId);
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                totalAmount: parseFloat(String(totalAmount || 0))
+            }
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
  * /api/quotations/{quotationId}:
  *   delete:
  *     summary: Delete a quotation
  *     tags: [Quotations]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: quotationId

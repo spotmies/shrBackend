@@ -32,6 +32,27 @@ export const createProject = async (data:
         updatedAt?: Date
     }) => {
 
+    // Validate projectType
+    const validProjectTypes = Object.values(ProjectType);
+    if (!validProjectTypes.includes(data.projectType as ProjectType)) {
+        throw new Error(`Invalid projectType: "${data.projectType}". Valid values are: ${validProjectTypes.join(', ')}`);
+    }
+
+    // Validate initialStatus
+    const validStatuses = Object.values(ProjectStatus);
+    if (!validStatuses.includes(data.initialStatus as ProjectStatus)) {
+        throw new Error(`Invalid initialStatus: "${data.initialStatus}". Valid values are: ${validStatuses.join(', ')}`);
+    }
+
+    // Check if User exists
+    const userExists = await prisma.user.findUnique({
+        where: { userId: data.userId }
+    });
+
+    if (!userExists) {
+        throw new Error(`User with ID ${data.userId} not found. Please provide a valid userId.`);
+    }
+
     const newProject = await prisma.project.create({
         data: {
             projectName: data.projectName,
@@ -61,6 +82,10 @@ export const getProjectByProjectId = async (projectId: string) => {
     }
     const project = await prisma.project.findUnique({
         where: { projectId },
+        include: {
+            user: true,       // Include Customer details
+            supervisor: true  // Include Supervisor details
+        }
     });
     if (!project) {
         throw new Error("Project not found");
@@ -69,8 +94,21 @@ export const getProjectByProjectId = async (projectId: string) => {
 };
 
 // Get all projects
-export const getAllTheProjects = async () => {
-    const projects = await prisma.project.findMany();
+export const getAllTheProjects = async (search?: string) => {
+    const whereClause: any = {};
+
+    if (search) {
+        whereClause.OR = [
+            { projectName: { contains: search, mode: 'insensitive' } },
+            { location: { contains: search, mode: 'insensitive' } },
+            { materialName: { contains: search, mode: 'insensitive' } }
+        ];
+    }
+
+    const projects = await prisma.project.findMany({
+        where: whereClause,
+        orderBy: { createdAt: 'desc' }
+    });
 
     if (!projects) {
         return [];
@@ -109,9 +147,27 @@ export const updateProject = async (projectId: string, updateData: {
     };
 
     if (updateData.projectName !== undefined) dataToUpdate.projectName = updateData.projectName;
-    if (updateData.projectType !== undefined) dataToUpdate.projectType = updateData.projectType as ProjectType;
+
+    if (updateData.projectType !== undefined) {
+        // Validate projectType
+        const validProjectTypes = Object.values(ProjectType);
+        if (!validProjectTypes.includes(updateData.projectType as ProjectType)) {
+            throw new Error(`Invalid projectType: "${updateData.projectType}". Valid values are: ${validProjectTypes.join(', ')}`);
+        }
+        dataToUpdate.projectType = updateData.projectType as ProjectType;
+    }
+
     if (updateData.location !== undefined) dataToUpdate.location = updateData.location;
-    if (updateData.initialStatus !== undefined) dataToUpdate.initialStatus = updateData.initialStatus as ProjectStatus;
+
+    if (updateData.initialStatus !== undefined) {
+        // Validate initialStatus
+        const validStatuses = Object.values(ProjectStatus);
+        if (!validStatuses.includes(updateData.initialStatus as ProjectStatus)) {
+            throw new Error(`Invalid initialStatus: "${updateData.initialStatus}". Valid values are: ${validStatuses.join(', ')}`);
+        }
+        dataToUpdate.initialStatus = updateData.initialStatus as ProjectStatus;
+    }
+
     if (updateData.startDate !== undefined) dataToUpdate.startDate = parseDate(updateData.startDate);
     if (updateData.expectedCompletion !== undefined) dataToUpdate.expectedCompletion = parseDate(updateData.expectedCompletion);
     if (updateData.totalBudget !== undefined) dataToUpdate.totalBudget = updateData.totalBudget;

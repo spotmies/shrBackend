@@ -33,8 +33,20 @@ export class UserEntity {
   @Column({ type: "text", nullable: true })
   notes!: string | null;
 
+  @Column({ type: "varchar", length: 255, nullable: true })
+  companyName!: string | null;
+
   @Column({ type: "uuid", nullable: true })
   supervisorId!: string | null;
+
+  @Column({ type: "varchar", length: 100, nullable: true, default: "UTC" })
+  timezone!: string | null;
+
+  @Column({ type: "varchar", length: 20, nullable: true, default: "USD" })
+  currency!: string | null;
+
+  @Column({ type: "varchar", length: 50, nullable: true, default: "English" })
+  language!: string | null;
 
   @CreateDateColumn({ name: "created_at" })
   createdAt!: Date;

@@ -275,14 +275,14 @@ export const assignProjectToSupervisor = async (supervisorId: string, projectId:
         }
     });
 
-    // Get supervisor
-    const updatedSupervisor = await prisma.supervisor.findUnique({
-        where: { supervisorId }
+    // Also update the supervisor's projectId field (primary/latest project)
+    const updatedSupervisor = await prisma.supervisor.update({
+        where: { supervisorId },
+        data: {
+            projectId: projectId,
+            updatedAt: new Date()
+        }
     });
-
-    if (!updatedSupervisor) {
-        throw new Error("Supervisor not found after update");
-    }
 
     // Get projects count
     const projectsCount = await prisma.project.count({
@@ -332,7 +332,18 @@ export const removeProjectFromSupervisor = async (supervisorId: string, projectI
         }
     });
 
-    // Get supervisor
+    // If the supervisor's projectId matches the removed project, clear it
+    if (supervisor.projectId === projectId) {
+        await prisma.supervisor.update({
+            where: { supervisorId },
+            data: {
+                projectId: null,
+                updatedAt: new Date()
+            }
+        });
+    }
+
+    // Get supervisor (fresh fetch)
     const updatedSupervisor = await prisma.supervisor.findUnique({
         where: { supervisorId }
     });
@@ -410,5 +421,7 @@ export const getAssignedProjects = async (supervisorId: string) => {
         supervisorEmail: supervisor.email,
         assignedProjectsCount: projects.length,
         projects: projects
-    };
+    }
 };
+
+

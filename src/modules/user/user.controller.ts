@@ -174,34 +174,64 @@ exports.getAllUsers = async (req: Request, res: Response) => {
  *       required: true
  *       content:
  *         application/json:
-     *           schema:
-     *             type: object
-     *             properties:
-     *               userName:
-     *                 type: string
-     *                 maxLength: 255
-     *                 example: "John Doe"
-     *               role:
-     *                 type: string
-     *                 enum: ["admin", "user", "supervisor"]
-     *                 example: "user"
-     *               email:
-     *                 type: string
-     *                 format: email
-     *                 example: "john.doe@example.com"
-     *               contact:
-     *                 type: string
-     *                 maxLength: 15
-     *                 example: "9876543210"
-     *               estimatedInvestment:
-     *                 type: number
-     *                 format: decimal
-     *                 example: 50000.00
-     *                 description: Estimated investment amount (optional)
-     *               notes:
-     *                 type: string
-     *                 example: "Additional notes about the user"
-     *                 description: Notes about the user (optional)
+ *           schema:
+ *             type: object
+ *             properties:
+ *               userName:
+ *                 type: string
+ *                 maxLength: 255
+ *                 example: "John Doe"
+ *               role:
+ *                 type: string
+ *                 enum: ["admin", "user", "supervisor"]
+ *                 example: "user"
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "john.doe@example.com"
+ *               password:
+ *                 type: string
+ *                 maxLength: 255
+ *                 example: "NewPassword123!"
+ *                 description: Password (will be hashed automatically)
+ *               contact:
+ *                 type: string
+ *                 maxLength: 15
+ *                 example: "9876543210"
+ *               estimatedInvestment:
+ *                 type: number
+ *                 format: decimal
+ *                 example: 50000.00
+ *                 description: Estimated investment amount (optional)
+ *               notes:
+ *                 type: string
+ *                 example: "Additional notes about the user"
+ *                 description: Notes about the user (optional)
+ *               companyName:
+ *                 type: string
+ *                 maxLength: 255
+ *                 example: "ABC Construction Ltd"
+ *                 description: Company name (optional)
+ *               supervisorId:
+ *                 type: string
+ *                 format: uuid
+ *                 example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
+ *                 description: Assigned supervisor ID (optional)
+ *               timezone:
+ *                 type: string
+ *                 maxLength: 100
+ *                 example: "Asia/Kolkata"
+ *                 description: User timezone preference (optional)
+ *               currency:
+ *                 type: string
+ *                 maxLength: 20
+ *                 example: "INR"
+ *                 description: User currency preference (optional)
+ *               language:
+ *                 type: string
+ *                 maxLength: 50
+ *                 example: "English"
+ *                 description: User language preference (optional)
  *     responses:
  *       200:
  *         description: User updated successfully
@@ -701,19 +731,19 @@ interface AuthRequest extends Request {
 
 /**
  * @swagger
- * /api/user/admin/settings:
+ * /api/user/admin/account-settings:
  *   get:
- *     summary: Get admin account settings
+ *     summary: Get admin account settings (email, company, contact)
  *     tags: [Users]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Admin settings fetched successfully
+ *         description: Admin account settings fetched successfully
  *       401:
  *         description: Unauthorized
  */
-exports.getAdminSettings = async (req: AuthRequest, res: Response) => {
+exports.getAdminAccountSettings = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.userId;
         if (!userId) {
@@ -724,8 +754,13 @@ exports.getAdminSettings = async (req: AuthRequest, res: Response) => {
 
         return res.status(200).json({
             success: true,
-            message: "Admin settings fetched successfully",
-            data: user
+            message: "Admin account settings fetched successfully",
+            data: {
+                email: user.email,
+                userName: user.userName,
+                companyName: user.companyName,
+                contact: user.contact
+            }
         });
     } catch (error) {
         return res.status(400).json({
@@ -737,9 +772,9 @@ exports.getAdminSettings = async (req: AuthRequest, res: Response) => {
 
 /**
  * @swagger
- * /api/user/admin/settings:
+ * /api/user/admin/account-settings:
  *   put:
- *     summary: Update admin account settings
+ *     summary: Update admin account settings (email, company, contact)
  *     tags: [Users]
  *     security:
  *       - bearerAuth: []
@@ -752,25 +787,178 @@ exports.getAdminSettings = async (req: AuthRequest, res: Response) => {
  *             properties:
  *               email:
  *                 type: string
+ *                 format: email
+ *                 example: "admin@example.com"
+ *               userName:
+ *                 type: string
+ *                 example: "Admin User"
  *               companyName:
  *                 type: string
+ *                 example: "SHR Homes"
+ *               contact:
+ *                 type: string
+ *                 example: "1234567890"
  *     responses:
  *       200:
- *         description: Admin settings updated successfully
+ *         description: Admin account settings updated successfully
+ *       401:
+ *         description: Unauthorized
  */
-exports.updateAdminSettings = async (req: AuthRequest, res: Response) => {
+exports.updateAdminAccountSettings = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.userId;
         if (!userId) {
             return res.status(401).json({ success: false, message: "Unauthorized" });
         }
 
-        const updatedUser = await UserServices.updateUser(userId, req.body);
+        // Only allow updating account-related fields
+        const { email, userName, companyName, contact } = req.body;
+        const updateData: any = {};
+
+        if (email !== undefined) updateData.email = email;
+        if (userName !== undefined) updateData.userName = userName;
+        if (companyName !== undefined) updateData.companyName = companyName;
+        if (contact !== undefined) updateData.contact = contact;
+
+        const updatedUser = await UserServices.updateUser(userId, updateData);
 
         return res.status(200).json({
             success: true,
-            message: "Admin settings updated successfully",
-            data: updatedUser
+            message: "Admin account settings updated successfully",
+            data: {
+                email: updatedUser.email,
+                userName: updatedUser.userName,
+                companyName: updatedUser.companyName,
+                contact: updatedUser.contact
+            }
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/admin/general-settings:
+ *   get:
+ *     summary: Get admin general settings (timezone, currency, language)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Admin general settings fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     timezone:
+ *                       type: string
+ *                       example: "UTC"
+ *                     currency:
+ *                       type: string
+ *                       example: "USD"
+ *                     language:
+ *                       type: string
+ *                       example: "English"
+ *       401:
+ *         description: Unauthorized
+ */
+exports.getAdminGeneralSettings = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        const user = await UserServices.getUserById(userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Admin general settings fetched successfully",
+            data: {
+                timezone: user.timezone,
+                currency: user.currency,
+                language: user.language
+            }
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/admin/general-settings:
+ *   put:
+ *     summary: Update admin general settings (timezone, currency, language)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               timezone:
+ *                 type: string
+ *                 example: "Eastern Time (ET)"
+ *                 description: "Timezone preference for the admin"
+ *               currency:
+ *                 type: string
+ *                 example: "USD ($)"
+ *                 description: "Currency preference for the admin"
+ *               language:
+ *                 type: string
+ *                 example: "English"
+ *                 description: "Language preference for the admin"
+ *     responses:
+ *       200:
+ *         description: Admin general settings updated successfully
+ *       401:
+ *         description: Unauthorized
+ */
+exports.updateAdminGeneralSettings = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        // Only allow updating general settings fields
+        const { timezone, currency, language } = req.body;
+        const updateData: any = {};
+
+        if (timezone !== undefined) updateData.timezone = timezone;
+        if (currency !== undefined) updateData.currency = currency;
+        if (language !== undefined) updateData.language = language;
+
+        const updatedUser = await UserServices.updateUser(userId, updateData);
+
+        return res.status(200).json({
+            success: true,
+            message: "Admin general settings updated successfully",
+            data: {
+                timezone: updatedUser.timezone,
+                currency: updatedUser.currency,
+                language: updatedUser.language
+            }
         });
     } catch (error) {
         return res.status(400).json({
@@ -807,6 +995,131 @@ exports.updateAdminSettings = async (req: AuthRequest, res: Response) => {
  *         description: Password updated successfully
  */
 exports.changeAdminPassword = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        const { currentPassword, newPassword, confirmNewPassword } = req.body;
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        if (newPassword !== confirmNewPassword) {
+            return res.status(400).json({ success: false, message: "New passwords do not match" });
+        }
+
+        const result = await UserServices.changePassword(userId, currentPassword, newPassword);
+
+        return res.status(200).json({
+            success: true,
+            message: result.message,
+            data: {}
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/profile:
+ *   put:
+ *     summary: Update own profile
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               userName:
+ *                 type: string
+ *               contact:
+ *                 type: string
+ *               companyName:
+ *                 type: string
+ *               notes:
+ *                 type: string
+ *               estimatedInvestment:
+ *                 type: number
+ *                 format: decimal
+ *                 description: Estimated investment amount
+ *               timezone:
+ *                 type: string
+ *                 description: Timezone preference
+ *               currency:
+ *                 type: string
+ *                 description: Currency preference
+ *               language:
+ *                 type: string
+ *                 description: Language preference
+ *     responses:
+ *       200:
+ *         description: Profile updated successfully
+ */
+exports.updateUserProfile = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        // Filter allowed fields to update
+        const { userName, contact, companyName, notes } = req.body;
+        const dataToUpdate = {
+            userName,
+            contact,
+            companyName,
+            notes
+        };
+
+        const updatedUser = await UserServices.updateUser(userId, dataToUpdate);
+
+        return res.status(200).json({
+            success: true,
+            message: "Profile updated successfully",
+            data: updatedUser
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/profile/change-password:
+ *   post:
+ *     summary: Change own password
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: ["currentPassword", "newPassword", "confirmNewPassword"]
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *               confirmNewPassword:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Password updated successfully
+ */
+exports.changeUserPassword = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.userId;
         const { currentPassword, newPassword, confirmNewPassword } = req.body;

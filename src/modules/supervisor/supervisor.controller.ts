@@ -675,7 +675,55 @@ exports.getAssignedProjects = async (req: Request, res: Response) => {
         });
     }
 };
+/**
+ * @swagger
+ * /api/supervisor/my-projects:
+ *   get:
+ *     summary: Get projects assigned to the logged-in supervisor
+ *     tags: [Supervisors]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Assigned projects fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/Project'
+ */
+exports.getMyAssignedProjects = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        if (!req.user || req.user.role !== 'supervisor') {
+            return res.status(401).json({ success: false, message: "Unauthorized: Supervisor access required" });
+        }
 
+        const supervisorId = req.user.userId;
+        if (!supervisorId) {
+            return res.status(401).json({ success: false, message: "Supervisor ID not found in token" });
+        }
+
+        // Reuse the existing service but extract just the projects list for the response
+        const result = await SupervisorServices.getAssignedProjects(supervisorId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Assigned projects fetched successfully",
+            data: result.projects
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
 
 
 

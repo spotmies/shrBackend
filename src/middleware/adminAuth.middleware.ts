@@ -1,12 +1,14 @@
 import { Request, Response, NextFunction } from "express";
 import dotenv from "dotenv";
 import { verifyToken, extractTokenFromHeader } from "../utils/jwt";
+import prisma from "../config/prisma.client";
 
 // Ensure dotenv is loaded before accessing environment variables
 dotenv.config({ path: "./src/config/.env" });
 
 interface AuthRequest extends Request {
     user?: {
+        userId: string;
         email: string;
         role: string;
     };
@@ -20,7 +22,7 @@ interface AuthRequest extends Request {
  * @param next - Express next function
  */
 
-export const adminAuthMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const adminAuthMiddleware = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
         // Extract token from Authorization header
         const authHeader = req.headers.authorization;
@@ -51,8 +53,21 @@ export const adminAuthMiddleware = (req: AuthRequest, res: Response, next: NextF
             });
         }
 
+        // Fetch user from database to get userId
+        const user = await prisma.user.findFirst({
+            where: { email: decoded.email }
+        });
+
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: "Admin user not found in database."
+            });
+        }
+
         // Attach user info to request object
         req.user = {
+            userId: user.userId,
             email: decoded.email,
             role: decoded.role
         };

@@ -16,15 +16,6 @@ import { generateAdminToken, generateUserToken } from "../../utils/jwt";
 
 
 export const adminLogin = async (email: string, password: string) => {
-    // Get admin credentials from .env
-    const adminEmail = process.env.ADMIN_EMAIL;
-    const adminPassword = process.env.ADMIN_PASSWORD;
-
-    // Check if admin credentials are configured
-    if (!adminEmail || !adminPassword) {
-        throw new Error("Admin credentials are not configured in environment variables");
-    }
-
     // Validate email
     if (!email || email.trim() === "") {
         throw new Error("Email is required");
@@ -35,24 +26,68 @@ export const adminLogin = async (email: string, password: string) => {
         throw new Error("Password is required");
     }
 
-    // Check if credentials match
-    if (email.trim() !== adminEmail.trim()) {
-        throw new Error("Invalid email or password");
+    // Step 1: Check Database for Admin User
+    let user = await prisma.user.findFirst({
+        where: { email: email.trim() }
+    });
+
+    // Check if the found user is actually an admin
+    if (user && user.role !== UserRole.admin) {
+        throw new Error("Access denied. Not an admin account.");
     }
 
-    if (password !== adminPassword) {
-        throw new Error("Invalid email or password");
+    if (user) {
+        // Step 2: User Exists in DB - Validate with DB Password
+        if (!user.password) {
+            throw new Error("Admin user exists but has no password set. Please reset via database or contact support.");
+        }
+
+        const isPasswordValid = await bcrypt.compare(password, user.password);
+        if (!isPasswordValid) {
+            throw new Error("Invalid email or password");
+        }
+    } else {
+        // Step 3: User Does NOT Exist in DB - Fallback to Env Credentials (Bootstrap)
+
+        // Get admin credentials from .env
+        const adminEmailFn = process.env.ADMIN_EMAIL;
+        const adminPasswordFn = process.env.ADMIN_PASSWORD;
+
+        if (!adminEmailFn || !adminPasswordFn) {
+            throw new Error("Admin credentials are not configured in environment variables");
+        }
+
+        // Exact match check
+        if (email.trim() !== adminEmailFn || password !== adminPasswordFn) {
+            // Note: We return generic error to avoid enumeration, but locally we know it's the Env check failing.
+            throw new Error("Invalid email or password");
+        }
+
+        // Valid Env Credentials! -> Bootstrap the Admin User in DB
+        const hashedPassword = await bcrypt.hash(password, 10);
+        user = await prisma.user.create({
+            data: {
+                userName: "Admin",
+                email: email.trim(),
+                role: UserRole.admin,
+                contact: "0000000000",
+                password: hashedPassword,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }
+        });
     }
 
     // Generate JWT token
-    const token = generateAdminToken(email);
+    const token = generateAdminToken(user.email);
 
     return {
         success: true,
         message: "Login successful",
         token,
-        email: email,
-        role: "admin"
+        email: user.email,
+        role: "admin",
+        userId: user.userId
     };
 };
 

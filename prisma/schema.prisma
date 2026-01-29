@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
@@ -31,6 +32,7 @@ enum ProjectStatus {
   Inprogress
   OnHold
   Completed
+  complete
 
   @@map("projects_initialstatus_enum")
 }
@@ -123,6 +125,12 @@ model User {
   notes               String?  @db.Text
   companyName         String?  @db.VarChar(255)
   supervisorId        String?  @db.Uuid
+  
+  // General Settings
+  timezone            String?  @db.VarChar(100) @default("UTC")
+  currency            String?  @db.VarChar(20)  @default("USD")
+  language            String?  @db.VarChar(50)  @default("English")
+  
   createdAt          DateTime      @default(now()) @map("created_at")
   updatedAt          DateTime      @updatedAt @map("updated_at")
 
@@ -212,7 +220,8 @@ model Supervisor {
   createdAt    DateTime         @default(now()) @map("created_at")
   updatedAt    DateTime         @updatedAt @map("updated_at")
 
-  projects Project[]
+  projectId    String?          @db.Uuid
+  projects     Project[]
 
   @@map("supervisors")
 }
@@ -291,6 +300,7 @@ model Material {
   quantity     Int
   date         DateTime @db.Date
   notes        String?  @db.Text
+  vendor       String?  @db.VarChar(255)
   
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -350,6 +360,7 @@ model Quotation {
   fileName    String?         @db.VarChar(255)
   fileType    String?         @db.VarChar(100)
   fileUrl     String?         @db.Text
+  customerName String?        @db.VarChar(255)
   
   createdAt   DateTime        @default(now()) @map("created_at")
   updatedAt   DateTime        @updatedAt @map("updated_at")

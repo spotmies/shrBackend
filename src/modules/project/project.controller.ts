@@ -1,4 +1,4 @@
-﻿import type { Request,Response} from "express";
+﻿import type { Request, Response } from "express";
 const ProjectServices = require("./project.services");
 
 /**
@@ -37,22 +37,22 @@ const ProjectServices = require("./project.services");
 
 
 //post
-exports.createProject = async(req: Request,res: Response)=>{
-    try{
+exports.createProject = async (req: Request, res: Response) => {
+    try {
 
         const projectData = await ProjectServices.createProject(req.body);
 
         return res.status(201).json({
-            success:true,
-            message:"Project created successfully",
-            data:projectData,
+            success: true,
+            message: "Project created successfully",
+            data: projectData,
         });
 
-    }catch(error){
+    } catch (error) {
         return res.status(400).json({
-            success:false,
-            message:error instanceof Error ? error.message : String(error),
-            
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+
         });
     }
 
@@ -92,20 +92,20 @@ exports.createProject = async(req: Request,res: Response)=>{
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //getId
-exports.getProjectById = async(req:Request,res:Response)=>{
-    try{
+exports.getProjectById = async (req: Request, res: Response) => {
+    try {
         const projectId = req.params.projectId;
         const project = await ProjectServices.getProjectByProjectId(projectId);
 
         return res.status(200).json({
-            success:true,
-            message:"Project fetched successfully",
-            data:project,
+            success: true,
+            message: "Project fetched successfully",
+            data: project,
         })
-    }catch(error){
+    } catch (error) {
         return res.status(400).json({
-            success:false,
-            message:error instanceof Error ? error.message: String(error),
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
         })
     }
 }
@@ -117,6 +117,12 @@ exports.getProjectById = async(req:Request,res:Response)=>{
  *   get:
  *     summary: Get all projects
  *     tags: [Projects]
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by project name, location, or material
  *     responses:
  *       200:
  *         description: Projects fetched successfully
@@ -139,19 +145,20 @@ exports.getProjectById = async(req:Request,res:Response)=>{
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //get
-exports.getAllProjects = async(req:Request,res:Response)=>{
-    try{
-          const projects = await ProjectServices.getAllTheProjects();
+exports.getAllProjects = async (req: Request, res: Response) => {
+    try {
+        const search = req.query.search as string;
+        const projects = await ProjectServices.getAllTheProjects(search);
 
-          return res.status(200).json({
-            success:true,
-            message:"Projects fetched successfully",
-            data:projects
-          })
-    }catch(error){
+        return res.status(200).json({
+            success: true,
+            message: "Projects fetched successfully",
+            data: projects
+        })
+    } catch (error) {
         return res.status(400).json({
-            success:false,
-            message:error instanceof Error ? error.message: String(error),
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
         })
     }
 }
@@ -243,21 +250,21 @@ exports.getAllProjects = async(req:Request,res:Response)=>{
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //put
-exports.updateProject = async(req:Request , res:Response)=>{
-    try{
+exports.updateProject = async (req: Request, res: Response) => {
+    try {
         const projectId = req.params.projectId;
 
         const updatedData = await ProjectServices.updateProject(projectId, req.body);
 
         return res.status(200).json({
-            success:true,
-            message:"Project updated successfully",
-            data:updatedData,
+            success: true,
+            message: "Project updated successfully",
+            data: updatedData,
         })
-    }catch(error){
+    } catch (error) {
         return res.status(400).json({
-            success:false,
-            message:error instanceof Error ? error.message : String(error),
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
         })
     }
 }
@@ -304,19 +311,19 @@ exports.updateProject = async(req:Request , res:Response)=>{
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //delete
-exports.deleteProject = async(req:Request,res:Response)=>{
-    try{
+exports.deleteProject = async (req: Request, res: Response) => {
+    try {
         const projectId = req.params.projectId;
         const deletedData = await ProjectServices.deleteProject(projectId)
         return res.status(200).json({
-            success:true,
-            message:"Project deleted successfully",
-            data:deletedData,
+            success: true,
+            message: "Project deleted successfully",
+            data: deletedData,
         })
-    }catch(error){
+    } catch (error) {
         return res.status(400).json({
-            success:false,
-            message:error instanceof Error ? error.message: String(error),
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
         })
     }
 }

@@ -3,8 +3,12 @@ const router = express.Router();
 const MaterialController = require("./material.controller");
 const { adminOrSupervisorAuthMiddleware } = require("../../middleware/adminOrSupervisorAuth.middleware");
 
-// Get total material count (must come before /:materialId route)
-router.get("/total-count", MaterialController.getTotalMaterialCount);
+/**
+ * @swagger
+ * tags:
+ *   - name: Materials
+ *     description: Material management endpoints
+ */
 
 // Get materials by project (must come before /:materialId route)
 router.get("/project/:projectId", MaterialController.getMaterialsByProject);

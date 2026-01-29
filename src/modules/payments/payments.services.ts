@@ -1,5 +1,6 @@
 ﻿import prisma from "../../config/prisma.client";
 import { PaymentMethod, PaymentStatus, PaymentType, Prisma } from "@prisma/client";
+import { notifyAdmins } from "../notifications/notifications.services";
 
 export const createPayment = async (data: {
     amount: number,
@@ -12,14 +13,23 @@ export const createPayment = async (data: {
     remarks?: string | null,
 }) => {
 
+    // Parse paymentBreakup if it's a string
+    let parsedBreakup = data.paymentBreakup;
+    if (typeof data.paymentBreakup === 'string') {
+        try {
+            parsedBreakup = JSON.parse(data.paymentBreakup);
+        } catch (e) {
+            // If failed to parse, leave it as is or handle error, but usually indicates invalid format
+        }
+    }
+
     // Validate MultiMode payment
     if (data.paymentType === PaymentType.MultiMode) {
-        const breakup = data.paymentBreakup;
-        if (!breakup || !Array.isArray(breakup) || breakup.length === 0) {
+        if (!parsedBreakup || !Array.isArray(parsedBreakup) || parsedBreakup.length === 0) {
             throw new Error("Payment breakup is required for MultiMode payments");
         }
 
-        const totalBreakup = breakup.reduce((sum: number, item: any) => sum + (parseFloat(item.amount) || 0), 0);
+        const totalBreakup = parsedBreakup.reduce((sum: number, item: any) => sum + (parseFloat(item.amount) || 0), 0);
 
         // Allow for small floating point differences
         if (Math.abs(totalBreakup - data.amount) > 0.01) {
@@ -34,13 +44,25 @@ export const createPayment = async (data: {
             paymentStatus: data.paymentStatus as PaymentStatus,
             paymentType: (data.paymentType as PaymentType) || PaymentType.Standard,
             paymentMethod: data.paymentMethod as PaymentMethod,
-            paymentBreakup: data.paymentBreakup || [],
+            paymentBreakup: parsedBreakup ? JSON.stringify(parsedBreakup) : Prisma.JsonNull, // Store as JSON string or JsonNull
             paymentDate: new Date(data.paymentDate),
             remarks: data.remarks || null,
             createdAt: new Date(),
             updatedAt: new Date(),
         }
     });
+
+    // Notify Admins
+    try {
+        const project = await prisma.project.findUnique({
+            where: { projectId: data.projectId },
+            select: { projectName: true }
+        });
+        const projectName = project?.projectName || "Unknown Project";
+        await notifyAdmins(`Payment of ${data.amount} received for ${projectName}`, "payment_received");
+    } catch (error) {
+        console.error("Failed to send notification:", error);
+    }
 
     return newPayment;
 }
@@ -91,9 +113,34 @@ export const updatePayment = async (paymentId: string, updateData: {
     // Validate MultiMode if being updated
     const isMultiMode = updateData.paymentType === PaymentType.MultiMode || (updateData.paymentType === undefined && payment.paymentType === PaymentType.MultiMode);
 
-    if (isMultiMode && (updateData.amount !== undefined || updateData.paymentBreakup !== undefined)) {
+    // Parse breakup if provided as string
+    let parsedBreakup = updateData.paymentBreakup;
+    if (typeof updateData.paymentBreakup === 'string') {
+        try {
+            parsedBreakup = JSON.parse(updateData.paymentBreakup);
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    if (isMultiMode && (updateData.amount !== undefined || parsedBreakup !== undefined)) {
         const amount = updateData.amount !== undefined ? updateData.amount : parseFloat(payment.amount.toString());
-        const breakup = updateData.paymentBreakup !== undefined ? updateData.paymentBreakup : (payment.paymentBreakup as any[]);
+        // Use new breakup if provided, otherwise parse existing breakup from DB
+        let breakup: any[] = [];
+
+        if (parsedBreakup !== undefined) {
+            breakup = parsedBreakup;
+        } else if (payment.paymentBreakup) {
+            // Handle existing DB value which might be JSON object or string
+            const dbBreakup = payment.paymentBreakup;
+            if (typeof dbBreakup === 'string') {
+                try {
+                    breakup = JSON.parse(dbBreakup);
+                } catch (e) { breakup = [] }
+            } else if (Array.isArray(dbBreakup)) {
+                breakup = dbBreakup;
+            }
+        }
 
         if (!breakup || !Array.isArray(breakup) || breakup.length === 0) {
             // Only throw if switching to MultiMode without providing breakup, or if existing breakup is empty
@@ -117,7 +164,7 @@ export const updatePayment = async (paymentId: string, updateData: {
     if (updateData.paymentStatus !== undefined) dataToUpdate.paymentStatus = updateData.paymentStatus as PaymentStatus;
     if (updateData.paymentType !== undefined) dataToUpdate.paymentType = updateData.paymentType as PaymentType;
     if (updateData.paymentMethod !== undefined) dataToUpdate.paymentMethod = updateData.paymentMethod as PaymentMethod;
-    if (updateData.paymentBreakup !== undefined) dataToUpdate.paymentBreakup = updateData.paymentBreakup;
+    if (parsedBreakup !== undefined) dataToUpdate.paymentBreakup = JSON.stringify(parsedBreakup);
     if (updateData.paymentDate !== undefined) dataToUpdate.paymentDate = new Date(updateData.paymentDate);
     if (updateData.remarks !== undefined) dataToUpdate.remarks = updateData.remarks;
 

@@ -3,31 +3,54 @@ const router = express.Router();
 const UserController = require("./user.controller");
 const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware");
 const { customerAuthMiddleware } = require("../../middleware/customerAuth.middleware");
+const { userAuthMiddleware } = require("../../middleware/userAuth.middleware");
 
-// Get all users
+/**
+ * @swagger
+ * tags:
+ *   name: Users
+ *   description: User management and profile endpoints
+ */
+
+
 router.get("/", UserController.getAllUsers);
 
-// Create a new user (Admin only)
+
+
 router.post("/", adminAuthMiddleware, UserController.createUser);
 
-// Admin Account Settings - Must come before /:userId routes
-router.get("/admin/settings", adminAuthMiddleware, UserController.getAdminSettings);
-router.put("/admin/settings", adminAuthMiddleware, UserController.updateAdminSettings);
+// Admin Account Settings (email, company, contact)
+router.get("/admin/account-settings", adminAuthMiddleware, UserController.getAdminAccountSettings);
+
+router.put("/admin/account-settings", adminAuthMiddleware, UserController.updateAdminAccountSettings);
+
+// Admin General Settings (timezone, currency, language)
+router.get("/admin/general-settings", adminAuthMiddleware, UserController.getAdminGeneralSettings);
+
+router.put("/admin/general-settings", adminAuthMiddleware, UserController.updateAdminGeneralSettings);
+
+// Admin Password
 router.post("/admin/change-password", adminAuthMiddleware, UserController.changeAdminPassword);
 
-// Get user by ID
+
+router.put("/profile", userAuthMiddleware, UserController.updateUserProfile);
+
+
+router.post("/profile/change-password", userAuthMiddleware, UserController.changeUserPassword);
+
+
 router.get("/:userId", UserController.getuserById);
 
-// Update user (Admin only)
+
 router.put("/:userId", adminAuthMiddleware, UserController.updateUser);
 
-// Delete user (Admin only)
+
 router.delete("/:userId", adminAuthMiddleware, UserController.deleteUser);
 
-// Approve supervisor for a user (Customer only)
+
 router.post("/:userId/approve-supervisor", customerAuthMiddleware, UserController.approveSupervisor);
 
-// Reject supervisor for a user (Customer only)
+
 router.post("/:userId/reject-supervisor", customerAuthMiddleware, UserController.rejectSupervisor);
 
 module.exports = router;

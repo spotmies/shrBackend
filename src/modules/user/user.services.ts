@@ -83,6 +83,9 @@ export const updateUser = async (userId: string, updatedUserData: {
     estimatedInvestment?: number | null;
     notes?: string | null;
     companyName?: string | null;
+    timezone?: string | null;
+    currency?: string | null;
+    language?: string | null;
     createdAt?: Date;
     updatedAt?: Date;
 }) => {
@@ -104,6 +107,11 @@ export const updateUser = async (userId: string, updatedUserData: {
     if (updatedUserData.estimatedInvestment !== undefined) dataToUpdate.estimatedInvestment = updatedUserData.estimatedInvestment;
     if (updatedUserData.notes !== undefined) dataToUpdate.notes = updatedUserData.notes;
     if (updatedUserData.companyName !== undefined) dataToUpdate.companyName = updatedUserData.companyName;
+
+    // General Settings
+    if (updatedUserData.timezone !== undefined) dataToUpdate.timezone = updatedUserData.timezone;
+    if (updatedUserData.currency !== undefined) dataToUpdate.currency = updatedUserData.currency;
+    if (updatedUserData.language !== undefined) dataToUpdate.language = updatedUserData.language;
 
     // Handle password update (hash if provided)
     if (updatedUserData.password !== undefined) {
@@ -272,3 +280,4 @@ export const changePassword = async (userId: string, currentPassword: string, ne
 
     return { success: true, message: "Password updated successfully" };
 };
+

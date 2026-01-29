@@ -1,6 +1,7 @@
 ﻿import prisma from "../../config/prisma.client";
 import { fileUploadService } from "../../services/fileUpload.service";
 import { QuotationStatus, Prisma } from "@prisma/client";
+import { notifyAdmins } from "../notifications/notifications.services";
 
 export const createQuotation = async (data:
     {
@@ -9,6 +10,7 @@ export const createQuotation = async (data:
         lineItems?: Array<{ description: string; amount: number }> | null,
         date?: Date | null,
         projectId: string,
+        customerName?: string | null,
         createdAt: Date,
         updatedAt: Date
     },
@@ -46,6 +48,15 @@ export const createQuotation = async (data:
         }
     }
 
+    // Verify project exists
+    const projectExists = await prisma.project.findUnique({
+        where: { projectId: data.projectId }
+    });
+
+    if (!projectExists) {
+        throw new Error(`Project with ID ${data.projectId} does not exist`);
+    }
+
     const newQuotation = await prisma.quotation.create({
         data: {
             totalAmount: finalTotalAmount,
@@ -53,6 +64,7 @@ export const createQuotation = async (data:
             lineItems: lineItems.length > 0 ? JSON.stringify(lineItems) : "[]",
             date: data.date || null,
             projectId: data.projectId,
+            customerName: data.customerName || null,
             fileData: null,
             fileName: file ? file.originalname : null,
             fileType: file ? file.mimetype : null,
@@ -86,7 +98,7 @@ const formatQuotationResponse = (quotation: any, index?: number) => {
         id: formattedId,
         quotationId: quotation.quotationId,
         projectName: quotation.project?.projectName || null,
-        customerName: quotation.project?.user?.userName || null,
+        customerName: quotation.customerName || quotation.project?.user?.userName || null,
         customerEmail: quotation.project?.user?.email || null,
         status: quotation.status,
         date: quotation.date ? new Date(quotation.date).toISOString().split('T')[0] : null,
@@ -131,6 +143,20 @@ export const getAllTheQuotations = async () => {
     return quotations.map((quotation: any, index: number) => formatQuotationResponse(quotation, index));
 };
 
+// Get total amount of a specific quotation
+export const getQuotationTotalAmount = async (quotationId: string) => {
+    const quotation = await prisma.quotation.findUnique({
+        where: { quotationId },
+        select: { totalAmount: true }
+    });
+
+    if (!quotation) {
+        throw new Error("Quotation not found");
+    }
+
+    return quotation.totalAmount;
+};
+
 // Update quotation
 export const updateQuotation = async (quotationId: string, updateData: {
     totalAmount?: number,
@@ -138,6 +164,7 @@ export const updateQuotation = async (quotationId: string, updateData: {
     lineItems?: Array<{ description: string; amount: number }> | null,
     date?: Date | null,
     projectId?: string,
+    customerName?: string | null,
     updatedAt?: Date
 }, file?: {
     buffer: Buffer
@@ -160,6 +187,10 @@ export const updateQuotation = async (quotationId: string, updateData: {
 
     if (updateData.status !== undefined) {
         dataToUpdate.status = updateData.status as QuotationStatus;
+    }
+
+    if (updateData.customerName !== undefined) {
+        dataToUpdate.customerName = updateData.customerName;
     }
 
     if (updateData.lineItems !== undefined) {
@@ -327,6 +358,15 @@ export const approveQuotation = async (quotationId: string, userId: string) => {
         throw new Error("Quotation not found after update");
     }
 
+    // Notify Admins
+    try {
+        const projectName = updatedQuotation.project?.projectName || "Unknown Project";
+        const userName = updatedQuotation.project?.user?.userName || "Customer";
+        await notifyAdmins(`Quotation for ${projectName} has been APPROVED by ${userName}`, "quotation_approval");
+    } catch (error) {
+        console.error("Failed to send notification:", error);
+    }
+
     return formatQuotationResponse(updatedQuotation);
 };
 
@@ -380,6 +420,15 @@ export const rejectQuotation = async (quotationId: string, userId: string) => {
 
     if (!updatedQuotation) {
         throw new Error("Quotation not found after update");
+    }
+
+    // Notify Admins
+    try {
+        const projectName = updatedQuotation.project?.projectName || "Unknown Project";
+        const userName = updatedQuotation.project?.user?.userName || "Customer";
+        await notifyAdmins(`Quotation for ${projectName} has been REJECTED by ${userName}`, "quotation_rejection");
+    } catch (error) {
+        console.error("Failed to send notification:", error);
     }
 
     return formatQuotationResponse(updatedQuotation);

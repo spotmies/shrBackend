@@ -4,6 +4,13 @@ const router = express.Router();
 const paymentController = require("./payments.controller");
 const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware");
 
+/**
+ * @swagger
+ * tags:
+ *   - name: Payments
+ *     description: Payment management endpoints
+ */
+
 // Admin only routes
 router.post("/createpayment", adminAuthMiddleware, paymentController.createPayment);
 router.put("/updatepayment/:paymentId", adminAuthMiddleware, paymentController.updatePayment);

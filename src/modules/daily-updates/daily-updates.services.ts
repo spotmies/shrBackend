@@ -1,8 +1,15 @@
 ﻿import prisma from "../../config/prisma.client";
 import { fileUploadService } from "../../services/fileUpload.service";
 import { ConstructionStage, DailyUpdateStatus, Prisma } from "@prisma/client";
+import { notifyAdmins, notifyUser } from "../notifications/notifications.services";
 
-// Create a new daily update
+/**
+ * Create a new daily update
+ * @param data - The daily update data including stage, description, projectId, and raw materials
+ * @param image - Optional image file to upload
+ * @param video - Optional video file to upload
+ * @returns The created daily update record
+ */
 export const createDailyUpdate = async (
     data: {
         constructionStage: string;
@@ -51,6 +58,7 @@ export const createDailyUpdate = async (
 
     // Validate projectId if provided
     let validProjectId: string | null = null;
+    let projectName = "";
     if (data.projectId && data.projectId.trim() !== "") {
         // Check if project exists
         const project = await prisma.project.findUnique({ where: { projectId: data.projectId } });
@@ -58,6 +66,7 @@ export const createDailyUpdate = async (
             throw new Error(`Project with ID ${data.projectId} not found`);
         }
         validProjectId = data.projectId;
+        projectName = project.projectName;
     }
 
     // Upload image to Supabase if provided
@@ -112,10 +121,21 @@ export const createDailyUpdate = async (
         }
     });
 
+    // Notify Admins
+    if (projectName) {
+        await notifyAdmins(`New daily update submitted for ${projectName}`, "daily_update");
+    } else {
+        await notifyAdmins(`New daily update submitted`, "daily_update");
+    }
+
     return newDailyUpdate;
 };
 
-// Get daily update by ID
+/**
+ * Get a daily update by its ID
+ * @param dailyUpdateId - The UUID of the daily update
+ * @returns The daily update record
+ */
 export const getDailyUpdateById = async (dailyUpdateId: string) => {
     if (!dailyUpdateId) {
         throw new Error("Daily update ID is required");
@@ -132,7 +152,10 @@ export const getDailyUpdateById = async (dailyUpdateId: string) => {
     return dailyUpdate;
 };
 
-// Get all daily updates
+/**
+ * Get all daily updates ordered by creation date (descending)
+ * @returns List of all daily updates
+ */
 export const getAllDailyUpdates = async () => {
     const dailyUpdates = await prisma.dailyUpdate.findMany({
         orderBy: { createdAt: "desc" },
@@ -144,31 +167,54 @@ export const getAllDailyUpdates = async () => {
     return dailyUpdates;
 };
 
-// Get daily updates by construction stage
-export const getDailyUpdatesByStage = async (constructionStage: string) => {
-    const validStages = ["Foundation", "Framing", "Plumbing & Electrical", "Interior Walls", "Painting", "Finishing"];
-    if (!validStages.includes(constructionStage)) {
-        throw new Error(`Invalid construction stage. Must be one of: ${validStages.join(", ")}`);
-    }
-
-    // Map string to enum
-    const stageEnum = constructionStage === "Plumbing & Electrical" ? ConstructionStage.Plumbing___Electrical :
-        constructionStage === "Interior Walls" ? ConstructionStage.Interior_Walls :
-            constructionStage as ConstructionStage;
-
-    const dailyUpdates = await prisma.dailyUpdate.findMany({
-        where: { constructionStage: stageEnum },
-        orderBy: { createdAt: "desc" },
+/**
+ * Get daily updates for projects assigned to a specific supervisor
+ * @param supervisorId - The ID of the supervisor
+ * @returns List of daily updates for assigned projects
+ */
+export const getDailyUpdatesForSupervisor = async (supervisorId: string) => {
+    // 1. Get all project IDs assigned to this supervisor
+    const assignedProjects = await prisma.project.findMany({
+        where: { supervisorId: supervisorId },
+        select: { projectId: true }
     });
 
-    if (!dailyUpdates) {
+    if (assignedProjects.length === 0) {
         return [];
     }
+
+    const projectIds = assignedProjects.map(p => p.projectId);
+
+    // 2. Fetch daily updates where projectId is in the list of assigned project IDs
+    const dailyUpdates = await prisma.dailyUpdate.findMany({
+        where: {
+            projectId: {
+                in: projectIds
+            }
+        },
+        orderBy: { createdAt: "desc" },
+        include: {
+            project: {
+                select: {
+                    projectName: true,
+                    location: true
+                }
+            }
+        }
+    });
 
     return dailyUpdates;
 };
 
-// Update daily update
+
+/**
+ * Update a daily update
+ * @param dailyUpdateId - ID of the update to modify
+ * @param updateData - Data fields to update
+ * @param image - Optional new image file
+ * @param video - Optional new video file
+ * @returns The updated daily update record
+ */
 export const updateDailyUpdate = async (
     dailyUpdateId: string,
     updateData: {
@@ -295,7 +341,11 @@ export const updateDailyUpdate = async (
     return updatedDailyUpdate;
 };
 
-// Delete daily update
+/**
+ * Delete a daily update
+ * @param dailyUpdateId - ID of the update to delete
+ * @returns Success message
+ */
 export const deleteDailyUpdate = async (dailyUpdateId: string) => {
     if (!dailyUpdateId) {
         throw new Error("Daily update ID is required");
@@ -316,7 +366,11 @@ export const deleteDailyUpdate = async (dailyUpdateId: string) => {
     return { success: true, message: "Daily update deleted successfully" };
 };
 
-// Get daily update image
+/**
+ * Get daily update image/video details
+ * @param dailyUpdateId - ID of the daily update
+ * @returns The daily update with file URLs
+ */
 export const getDailyUpdateImage = async (dailyUpdateId: string) => {
     if (!dailyUpdateId) {
         throw new Error("Daily update ID is required");
@@ -341,8 +395,13 @@ export const getDailyUpdateImage = async (dailyUpdateId: string) => {
     return dailyUpdate;
 };
 
-// Get daily updates by status for a specific user (Customer)
-// The user sees updates for projects they are assigned to
+/**
+ * Get daily updates by status for a specific user (Customer)
+ * Used to fetch updates for projects owned by the user.
+ * @param userId - The ID of the authenticated user
+ * @param status - The status filter (pending, approved, rejected)
+ * @returns List of matching daily updates
+ */
 export const getDailyUpdatesByStatusForUser = async (userId: string, status: string) => {
     // Validate status
     const validStatuses = ["pending", "approved", "rejected"];
@@ -385,7 +444,13 @@ export const getDailyUpdatesByStatusForUser = async (userId: string, status: str
     return dailyUpdates;
 };
 
-// Approve a daily update (Customer)
+/**
+ * Approve a daily update (Customer)
+ * Validates that the update belongs to a project owned by the user.
+ * @param dailyUpdateId - ID of the update to approve
+ * @param userId - ID of the authenticated user
+ * @returns The updated daily update record
+ */
 export const approveDailyUpdate = async (dailyUpdateId: string, userId: string) => {
     // Check if the daily update belongs to a project owned by the user
     const dailyUpdate = await prisma.dailyUpdate.findUnique({
@@ -409,10 +474,24 @@ export const approveDailyUpdate = async (dailyUpdateId: string, userId: string) 
         }
     });
 
+    // Notify Admins
+    try {
+        const projectName = dailyUpdate.project?.projectName || "Unknown Project";
+        await notifyAdmins(`Daily update for ${projectName} has been APPROVED by the customer`, "daily_update_approval");
+    } catch (error) {
+        console.error("Failed to send notification:", error);
+    }
+
     return updatedDailyUpdate;
 };
 
-// Reject a daily update (Customer)
+/**
+ * Reject a daily update (Customer)
+ * Validates that the update belongs to a project owned by the user.
+ * @param dailyUpdateId - ID of the update to reject
+ * @param userId - ID of the authenticated user
+ * @returns The updated daily update record
+ */
 export const rejectDailyUpdate = async (dailyUpdateId: string, userId: string) => {
     // Check if the daily update belongs to a project owned by the user
     const dailyUpdate = await prisma.dailyUpdate.findUnique({
@@ -436,5 +515,87 @@ export const rejectDailyUpdate = async (dailyUpdateId: string, userId: string) =
         }
     });
 
+    // Notify Admins
+    try {
+        const projectName = dailyUpdate.project?.projectName || "Unknown Project";
+        await notifyAdmins(`Daily update for ${projectName} has been REJECTED by the customer`, "daily_update_rejection");
+    } catch (error) {
+        console.error("Failed to send notification:", error);
+    }
+
     return updatedDailyUpdate;
+};
+
+/**
+ * Get construction timeline for a project
+ * @param projectId - The project ID
+ * @param supervisorId - Optional supervisor ID to verify assignment
+ * @returns Timeline with status and dates for each stage
+ */
+export const getConstructionTimeline = async (projectId: string, supervisorId?: string) => {
+    // 1. Verify project exists
+    const project = await prisma.project.findUnique({ where: { projectId } });
+    if (!project) {
+        throw new Error(`Project with ID ${projectId} not found`);
+    }
+
+    // 2. If supervisorId is provided, check if project is assigned to this supervisor
+    if (supervisorId && project.supervisorId !== supervisorId) {
+        throw new Error("Unauthorized: You are not assigned to this project");
+    }
+
+    // 3. Fetch all daily updates for this project
+    const updates = await prisma.dailyUpdate.findMany({
+        where: { projectId },
+        orderBy: { createdAt: 'desc' }
+    });
+
+    const stages = [
+        "Foundation",
+        "Framing",
+        "Plumbing & Electrical",
+        "Interior Walls",
+        "Painting",
+        "Finishing"
+    ];
+
+    const timeline = stages.map(stage => {
+        // Map display string to Enum
+        let stageEnum: ConstructionStage;
+        if (stage === "Plumbing & Electrical") {
+            stageEnum = ConstructionStage.Plumbing___Electrical;
+        } else if (stage === "Interior Walls") {
+            stageEnum = ConstructionStage.Interior_Walls;
+        } else {
+            stageEnum = stage as ConstructionStage;
+        }
+
+        const stageUpdates = updates.filter(u => u.constructionStage === stageEnum);
+
+        let status = "Pending";
+        let date: Date | null = null;
+
+        if (stageUpdates.length > 0) {
+            // Check if any is approved
+            const approved = stageUpdates.find(u => u.status === DailyUpdateStatus.approved);
+            if (approved) {
+                status = "Completed";
+                date = approved.updatedAt; // Completion date
+            } else {
+                // If any pending or rejected, it's considered In Progress/Active attempt
+                // Use the latest one for date
+                const latest = stageUpdates[0];
+                status = "In Progress";
+                date = latest ? latest.createdAt : null;
+            }
+        }
+
+        return {
+            stage,
+            status,
+            date: date ? date.toISOString().split('T')[0] : null
+        };
+    });
+
+    return timeline;
 };

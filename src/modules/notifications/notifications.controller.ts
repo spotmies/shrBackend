@@ -54,6 +54,32 @@ exports.getNotifications = async (req: RequestWithUser, res: Response) => {
 };
 
 // GET /api/notifications/unread-count
+/**
+ * @swagger
+ * /api/notifications/unread-count:
+ *   get:
+ *     summary: Get count of unread notifications
+ *     tags: [Notifications]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Unread count fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     count:
+ *                       type: integer
+ */
 exports.getUnreadCount = async (req: RequestWithUser, res: Response) => {
     try {
         const userId = req.user?.userId;
@@ -77,6 +103,28 @@ exports.getUnreadCount = async (req: RequestWithUser, res: Response) => {
 };
 
 // PATCH /api/notifications/:notificationId/read
+/**
+ * @swagger
+ * /api/notifications/{notificationId}/read:
+ *   patch:
+ *     summary: Mark a notification as read
+ *     tags: [Notifications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: notificationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Notification ID
+ *     responses:
+ *       200:
+ *         description: Notification marked as read
+ *       404:
+ *         description: Notification not found
+ */
 exports.markAsRead = async (req: RequestWithUser, res: Response) => {
     try {
         const userId = req.user?.userId;
@@ -102,6 +150,18 @@ exports.markAsRead = async (req: RequestWithUser, res: Response) => {
 };
 
 // PATCH /api/notifications/mark-all-read
+/**
+ * @swagger
+ * /api/notifications/mark-all-read:
+ *   patch:
+ *     summary: Mark all notifications as read
+ *     tags: [Notifications]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: All notifications marked as read
+ */
 exports.markAllAsRead = async (req: RequestWithUser, res: Response) => {
     try {
         const userId = req.user?.userId;

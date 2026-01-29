@@ -36,6 +36,12 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 /* -------------------- Swagger Documentation -------------------- */
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
+// Serve raw OpenAPI spec as JSON for easy download
+app.get("/api-docs-json", (req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    res.send(swaggerSpec);
+});
+
 // app.listen(env.PORT,()=>{
 //     console.log(`Server is running on port ${env.PORT}`);
 // });
@@ -53,6 +59,21 @@ app.use("/api/expense", expenseRoutes)
 app.use("/api/daily-updates", dailyUpdatesRoutes)
 app.use("/api/messages", messagesRoutes)
 app.use("/api/notifications", notificationsRoutes)
+
+// Global Error Handler for JSON parse errors and other unhandled errors
+app.use((err: any, req: Request, res: Response, next: any) => {
+    if (err instanceof SyntaxError && 'body' in err) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid JSON payload provided. Please check for syntax errors like missing quotes or trailing commas."
+        });
+    }
+    console.error(err);
+    res.status(500).json({
+        success: false,
+        message: "Internal Server Error"
+    });
+});
 
 // app.get("/",(req: Request,res:Response)=>{
 //     return res.json({

@@ -5,12 +5,22 @@ const upload = require("../../config/multer.config").default;
 const { userAuthMiddleware } = require("../../middleware/userAuth.middleware");
 const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware");
 
+/**
+ * @swagger
+ * tags:
+ *   - name: Quotations
+ *     description: Quotation management endpoints
+ */
+
 // ============================================
 // Public/Admin Routes (no user auth required)
 // ============================================
 
 // Create a new quotation (Admin only)
 router.post("/", adminAuthMiddleware, upload.single("file"), QuotationController.createQuotation);
+
+// Get total amount of a specific quotation (Public/Admin)
+router.get("/:quotationId/total-amount", QuotationController.getQuotationTotalAmount);
 
 // Get all quotations (Public or Admin)
 router.get("/", QuotationController.getAllQuotations);
@@ -41,11 +51,11 @@ router.post("/:quotationId/reject", userAuthMiddleware, QuotationController.reje
 // Get quotation by ID
 router.get("/:quotationId", QuotationController.getQuotationById);
 
-// Update quotation (Admin only - should add adminAuthMiddleware if needed)
-router.put("/:quotationId", upload.single("file"), QuotationController.updateQuotation);
+// Update quotation (Admin only)
+router.put("/:quotationId", adminAuthMiddleware, upload.single("file"), QuotationController.updateQuotation);
 
-// Delete quotation (Admin only - should add adminAuthMiddleware if needed)
-router.delete("/:quotationId", QuotationController.deleteQuotation);
+// Delete quotation (Admin only)
+router.delete("/:quotationId", adminAuthMiddleware, QuotationController.deleteQuotation);
 
 module.exports = router;
 
