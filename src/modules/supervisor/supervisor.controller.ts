@@ -1,6 +1,104 @@
 ﻿import type { Request, Response } from "express";
 const SupervisorServices = require("./supervisor.services");
 
+interface AuthenticatedRequest extends Request {
+    user?: {
+        userId?: string;
+        email: string;
+        role: string;
+    };
+}
+
+/**
+ * @swagger
+ * /api/supervisor/profile:
+ *   get:
+ *     summary: Get my profile (Supervisor)
+ *     tags: [Supervisors]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profile fetched successfully
+ */
+exports.getProfile = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        if (!req.user || req.user.role !== 'supervisor') {
+            return res.status(401).json({ success: false, message: "Unauthorized: Supervisor access required" });
+        }
+
+        // userId from commonAuthMiddleware is mapped to supervisorId for supervisors
+        const supervisorId = req.user.userId;
+        if (!supervisorId) {
+            return res.status(404).json({ success: false, message: "Supervisor ID not found in token" });
+        }
+
+        const profile = await SupervisorServices.getSupervisorProfile(supervisorId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Profile fetched successfully",
+            data: profile
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/supervisor/profile:
+ *   put:
+ *     summary: Update my profile
+ *     tags: [Supervisors]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               fullName:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               phoneNumber:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Profile updated successfully
+ */
+exports.updateProfile = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        if (!req.user || req.user.role !== 'supervisor') {
+            return res.status(401).json({ success: false, message: "Unauthorized: Supervisor access required" });
+        }
+
+        const supervisorId = req.user.userId;
+        if (!supervisorId) {
+            return res.status(404).json({ success: false, message: "Supervisor ID not found in token" });
+        }
+
+        const updatedProfile = await SupervisorServices.updateSupervisor(supervisorId, req.body);
+
+        return res.status(200).json({
+            success: true,
+            message: "Profile updated successfully",
+            data: updatedProfile
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
 /**
  * @swagger
  * /api/supervisor:
@@ -39,6 +137,13 @@ const SupervisorServices = require("./supervisor.services");
  *                 enum: ["Active", "Inactive"]
  *                 default: "Active"
  *                 example: "Active"
+ *               projectIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: uuid
+ *                 description: Optional list of project IDs to assign during creation
+ *                 example: ["123e4567-e89b-12d3-a456-426614174000", "567e4567-e89b-12d3-a456-426614174111"]
  *     responses:
  *       201:
  *         description: Supervisor created successfully
@@ -126,6 +231,12 @@ exports.getSupervisorById = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get all supervisors
  *     tags: [Supervisors]
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by fullName, email, or phoneNumber
  *     responses:
  *       200:
  *         description: Supervisors fetched successfully
@@ -143,7 +254,8 @@ exports.getSupervisorById = async (req: Request, res: Response) => {
  */
 exports.getAllSupervisors = async (req: Request, res: Response) => {
     try {
-        const supervisors = await SupervisorServices.getAllSupervisors();
+        const { search } = req.query;
+        const supervisors = await SupervisorServices.getAllSupervisors(search as string);
         return res.status(200).json({
             success: true,
             message: "Supervisors fetched successfully",
@@ -201,6 +313,13 @@ exports.getAllSupervisors = async (req: Request, res: Response) => {
  *                 type: string
  *                 enum: ["Active", "Inactive"]
  *                 example: "Active"
+ *               projectIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: uuid
+ *                 example: ["123e4567-e89b-12d3-a456-426614174000"]
+ *                 description: List of project IDs to assign (addively)
  *     responses:
  *       200:
  *         description: Supervisor updated successfully
@@ -317,10 +436,12 @@ exports.deleteSupervisor = async (req: Request, res: Response) => {
  *                           type: string
  *                         email:
  *                           type: string
- *                         projectId:
- *                           type: string
- *                         project:
- *                           type: object
+ *                         assignedProjectsCount:
+ *                           type: integer
+ *                         assignedProjects:
+ *                           type: array
+ *                           items:
+ *                             $ref: '#/components/schemas/Project'
  *       400:
  *         description: Bad request - Supervisor or project not found
  *       401:
@@ -396,6 +517,11 @@ exports.assignProjectToSupervisor = async (req: Request, res: Response) => {
  *                   properties:
  *                     data:
  *                       type: object
+ *                       properties:
+ *                         supervisorId:
+ *                           type: string
+ *                         assignedProjectsCount:
+ *                           type: integer
  *       400:
  *         description: Bad request - Supervisor or project not found
  *       401:
@@ -577,7 +703,55 @@ exports.getAssignedProjects = async (req: Request, res: Response) => {
         });
     }
 };
+/**
+ * @swagger
+ * /api/supervisor/my-projects:
+ *   get:
+ *     summary: Get projects assigned to the logged-in supervisor
+ *     tags: [Supervisors]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Assigned projects fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/Project'
+ */
+exports.getMyAssignedProjects = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        if (!req.user || req.user.role !== 'supervisor') {
+            return res.status(401).json({ success: false, message: "Unauthorized: Supervisor access required" });
+        }
 
+        const supervisorId = req.user.userId;
+        if (!supervisorId) {
+            return res.status(401).json({ success: false, message: "Supervisor ID not found in token" });
+        }
+
+        // Reuse the existing service but extract just the projects list for the response
+        const result = await SupervisorServices.getAssignedProjects(supervisorId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Assigned projects fetched successfully",
+            data: result.projects
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
 
 
 

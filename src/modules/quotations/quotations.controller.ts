@@ -11,6 +11,56 @@ interface MulterRequest extends Request {
 
 /**
  * @swagger
+ * /api/quotations/user/{userId}:
+ *   get:
+ *     summary: Get quotations by User ID
+ *     tags: [Quotations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The user ID to filter by
+ *     responses:
+ *       200:
+ *         description: Quotations fetched successfully
+ *       400:
+ *         description: Bad request - Invalid User ID
+ *       401:
+ *         description: Unauthorized - User authentication required
+ */
+exports.getQuotationsByUserId = async (req: Request, res: Response) => {
+    try {
+        const userId = req.params.userId as string;
+
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                message: "User ID is required"
+            });
+        }
+
+        const quotations = await QuotationServices.getQuotationsByUserId(userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Quotations fetched successfully",
+            data: quotations
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
  * /api/quotations:
  *   post:
  *     summary: Create a new quotation (Admin only)
@@ -47,6 +97,10 @@ interface MulterRequest extends Request {
  *                 type: string
  *                 format: uuid
  *                 example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
+ *               customerName:
+ *                 type: string
+ *                 example: "John Doe"
+ *                 description: Name of the customer
  *               file:
  *                 type: string
  *                 format: binary
@@ -79,6 +133,8 @@ interface MulterRequest extends Request {
  *                         projectId:
  *                           type: string
  *                           format: uuid
+ *                         customerName:
+ *                           type: string
  *                         fileName:
  *                           type: string
  *                         fileType:
@@ -110,12 +166,17 @@ exports.createQuotation = async (req: MulterRequest, res: Response) => {
         }
 
         // Parse lineItems from JSON string if provided
-        let lineItems: Array<{ description: string; amount: number }> | null = null;
+        let lineItems: any[] | null = null;
         if (req.body.lineItems) {
             try {
                 lineItems = typeof req.body.lineItems === 'string'
                     ? JSON.parse(req.body.lineItems)
                     : req.body.lineItems;
+
+                // If parsed/original lineItems is not an array but is an object (and not null), wrap it
+                if (!Array.isArray(lineItems) && typeof lineItems === 'object' && lineItems !== null) {
+                    lineItems = [lineItems];
+                }
 
                 // Validate lineItems structure
                 if (!Array.isArray(lineItems)) {
@@ -123,8 +184,20 @@ exports.createQuotation = async (req: MulterRequest, res: Response) => {
                 }
 
                 // Validate each item has description and amount
-                for (const item of lineItems) {
-                    if (!item.description || typeof item.amount !== 'number') {
+                for (let i = 0; i < lineItems.length; i++) {
+                    let item = lineItems[i];
+
+                    // Parse item if it's a string
+                    if (typeof item === 'string') {
+                        try {
+                            item = JSON.parse(item);
+                            lineItems[i] = item; // Update array with parsed object
+                        } catch (e) {
+                            throw new Error(`Invalid JSON in lineItem at index ${i}`);
+                        }
+                    }
+
+                    if (!item || typeof item !== 'object' || !item.description || typeof item.amount !== 'number') {
                         throw new Error("Each line item must have 'description' (string) and 'amount' (number)");
                     }
                 }
@@ -136,11 +209,27 @@ exports.createQuotation = async (req: MulterRequest, res: Response) => {
             }
         }
 
+        // Parse date if provided
+        let dateVal: Date | undefined | null = undefined;
+        if (req.body.date) {
+            const parsedDate = new Date(req.body.date);
+            if (!isNaN(parsedDate.getTime())) {
+                dateVal = parsedDate;
+            } else {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid date format"
+                });
+            }
+        }
+
         // Prepare quotation data
         const quotationData = {
             ...req.body,
+            date: dateVal,
             lineItems: lineItems,
-            totalAmount: req.body.totalAmount ? parseFloat(String(req.body.totalAmount)) : 0
+            totalAmount: req.body.totalAmount ? parseFloat(String(req.body.totalAmount)) : 0,
+            customerName: req.body.customerName || null
         };
 
         const createdQuotation = await QuotationServices.createQuotation(quotationData, file || undefined);
@@ -201,6 +290,8 @@ exports.createQuotation = async (req: MulterRequest, res: Response) => {
  *                         projectId:
  *                           type: string
  *                           format: uuid
+ *                         customerName:
+ *                           type: string
  *       400:
  *         description: Bad request - Quotation not found
  *         content:
@@ -261,7 +352,6 @@ exports.getQuotationById = async (req: Request, res: Response) => {
  *                           customerName:
  *                             type: string
  *                           customerEmail:
- *                             type: string
  *                           status:
  *                             type: string
  *                           date:
@@ -310,6 +400,8 @@ exports.getAllQuotations = async (req: Request, res: Response) => {
  *     summary: Update a quotation (partial update)
  *     description: Update one or more fields of an existing quotation. All fields are optional - only include the fields you want to update.
  *     tags: [Quotations]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: quotationId
@@ -353,6 +445,10 @@ exports.getAllQuotations = async (req: Request, res: Response) => {
  *                 format: uuid
  *                 description: The project ID associated with the quotation
  *                 example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
+ *               customerName:
+ *                 type: string
+ *                 example: "John Doe"
+ *                 description: Name of the customer (optional update)
  *               file:
  *                 type: string
  *                 format: binary
@@ -403,6 +499,10 @@ exports.getAllQuotations = async (req: Request, res: Response) => {
  *                           format: uuid
  *                           nullable: true
  *                           description: Associated project ID
+ *                         customerName:
+ *                           type: string
+ *                           nullable: true
+ *                           description: Associated customer name
  *                         fileName:
  *                           type: string
  *                           nullable: true
@@ -456,6 +556,10 @@ exports.updateQuotation = async (req: MulterRequest, res: Response) => {
             if (validStatuses.includes(req.body.status)) {
                 updateData.status = req.body.status;
             }
+        }
+
+        if (req.body.customerName !== undefined && req.body.customerName !== null && req.body.customerName !== '') {
+            updateData.customerName = req.body.customerName;
         }
 
         // Parse lineItems from JSON string if provided
@@ -544,10 +648,67 @@ exports.updateQuotation = async (req: MulterRequest, res: Response) => {
 
 /**
  * @swagger
+ * /api/quotations/{quotationId}/total-amount:
+ *   get:
+ *     summary: Get the total amount of a specific quotation
+ *     tags: [Quotations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: quotationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The quotation ID
+ *     responses:
+ *       200:
+ *         description: Total amount fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     totalAmount:
+ *                       type: number
+ *                       example: 50000.00
+ *       400:
+ *         description: Bad request - Quotation not found
+ */
+exports.getQuotationTotalAmount = async (req: Request, res: Response) => {
+    try {
+        const quotationId = req.params.quotationId as string;
+        const totalAmount = await QuotationServices.getQuotationTotalAmount(quotationId);
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                totalAmount: parseFloat(String(totalAmount || 0))
+            }
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
  * /api/quotations/{quotationId}:
  *   delete:
  *     summary: Delete a quotation
  *     tags: [Quotations]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: quotationId
@@ -856,3 +1017,96 @@ exports.rejectQuotation = async (req: Request, res: Response) => {
 };
 
 
+
+/**
+ * @swagger
+ * /api/quotations/{quotationId}/download:
+ *   get:
+ *     summary: Download a quotation file
+ *     tags: [Quotations]
+ *     parameters:
+ *       - in: path
+ *         name: quotationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The quotation ID
+ *     responses:
+ *       200:
+ *         description: File downloaded successfully
+ *         content:
+ *           application/octet-stream:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       400:
+ *         description: Bad request - Quotation not found
+ */
+exports.downloadQuotation = async (req: Request, res: Response) => {
+    try {
+        const quotationId = req.params.quotationId as string;
+        const quotationFile = await QuotationServices.getQuotationFile(quotationId);
+
+        // If we have a fileUrl (Supabase), redirect to it
+        if (quotationFile.fileUrl) {
+            return res.redirect(quotationFile.fileUrl);
+        }
+
+        // Fallback for files stored in DB (buffer)
+        if (quotationFile.fileData && quotationFile.fileData.length > 0) {
+            res.setHeader('Content-Type', quotationFile.fileType || 'application/octet-stream');
+            res.setHeader('Content-Disposition', `attachment; filename="${quotationFile.fileName || 'quotation'}"`);
+            return res.status(200).send(quotationFile.fileData);
+        }
+
+        return res.status(404).json({
+            success: false,
+            message: "File content not found"
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/quotations/{quotationId}/resend:
+ *   post:
+ *     summary: Resend a quotation notification to the customer (Admin only)
+ *     tags: [Quotations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: quotationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The quotation ID to resend
+ *     responses:
+ *       200:
+ *         description: Quotation resent successfully
+ *       400:
+ *         description: Bad request - Quotation not found or customer not found
+ *       401:
+ *         description: Unauthorized
+ */
+exports.resendQuotation = async (req: Request, res: Response) => {
+    try {
+        const quotationId = req.params.quotationId as string;
+        const result = await QuotationServices.resendQuotation(quotationId);
+
+        return res.status(200).json(result);
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};

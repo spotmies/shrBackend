@@ -1,6 +1,7 @@
 ﻿import prisma from "../../config/prisma.client";
 import { fileUploadService } from "../../services/fileUpload.service";
 import { QuotationStatus, Prisma } from "@prisma/client";
+import { notifyAdmins, notifyUser } from "../notifications/notifications.services";
 
 export const createQuotation = async (data:
     {
@@ -9,6 +10,8 @@ export const createQuotation = async (data:
         lineItems?: Array<{ description: string; amount: number }> | null,
         date?: Date | null,
         projectId: string,
+        userId?: string,
+        customerName?: string | null,
         createdAt: Date,
         updatedAt: Date
     },
@@ -35,14 +38,38 @@ export const createQuotation = async (data:
     let fileUrl: string | null = null;
     if (file) {
         try {
-            fileUrl = await fileUploadService.uploadFile({
+            const uploadResult = await fileUploadService.uploadFile({
                 file: file as any,
                 bucket: 'uploads',
                 folder: 'quotations'
             });
+            fileUrl = uploadResult.publicUrl;
+            (data as any).fileId = uploadResult.id;
         } catch (error) {
             console.error("Error uploading file to Supabase:", error);
             throw new Error("Failed to upload file to storage");
+        }
+    }
+
+    // Verify project exists
+    const projectExists = await prisma.project.findUnique({
+        where: { projectId: data.projectId }
+    });
+
+    if (!projectExists) {
+        throw new Error(`Project with ID ${data.projectId} does not exist`);
+    }
+
+    // Determine User ID
+    let userIdToUse = data.userId;
+    if (!userIdToUse) {
+        // Find the first member of the project who is a regular user
+        const projectWithMembers = await prisma.project.findUnique({
+            where: { projectId: data.projectId },
+            include: { members: { where: { role: 'user' }, take: 1 } }
+        });
+        if (projectWithMembers && projectWithMembers.members && projectWithMembers.members.length > 0) {
+            userIdToUse = projectWithMembers.members[0].userId;
         }
     }
 
@@ -53,6 +80,8 @@ export const createQuotation = async (data:
             lineItems: lineItems.length > 0 ? JSON.stringify(lineItems) : "[]",
             date: data.date || null,
             projectId: data.projectId,
+            userId: userIdToUse || null,
+            customerName: data.customerName || null,
             fileData: null,
             fileName: file ? file.originalname : null,
             fileType: file ? file.mimetype : null,
@@ -86,8 +115,8 @@ const formatQuotationResponse = (quotation: any, index?: number) => {
         id: formattedId,
         quotationId: quotation.quotationId,
         projectName: quotation.project?.projectName || null,
-        customerName: quotation.project?.user?.userName || null,
-        customerEmail: quotation.project?.user?.email || null,
+        customerName: quotation.customerName || (quotation.project?.members?.find((m: any) => m.role === 'user')?.userName) || null,
+        customerEmail: (quotation.project?.members?.find((m: any) => m.role === 'user')?.email) || null,
         status: quotation.status,
         date: quotation.date ? new Date(quotation.date).toISOString().split('T')[0] : null,
         lineItems: quotation.lineItems || [],
@@ -95,6 +124,7 @@ const formatQuotationResponse = (quotation: any, index?: number) => {
         fileName: quotation.fileName || null,
         fileType: quotation.fileType || null,
         fileUrl: quotation.fileUrl || null,
+        userId: quotation.userId || null,
         createdAt: quotation.createdAt,
         updatedAt: quotation.updatedAt
     };
@@ -108,7 +138,7 @@ export const getQuotationByQuotationId = async (quotationId: string) => {
     }
     const quotation = await prisma.quotation.findUnique({
         where: { quotationId },
-        include: { project: { include: { user: true } } }
+        include: { project: { include: { members: true } } }
     });
     if (!quotation) {
         throw new Error("Quotation not found");
@@ -119,7 +149,7 @@ export const getQuotationByQuotationId = async (quotationId: string) => {
 // Get all quotations
 export const getAllTheQuotations = async () => {
     const quotations = await prisma.quotation.findMany({
-        include: { project: { include: { user: true } } },
+        include: { project: { include: { members: true } } },
         orderBy: { createdAt: "desc" }
     });
 
@@ -131,6 +161,20 @@ export const getAllTheQuotations = async () => {
     return quotations.map((quotation: any, index: number) => formatQuotationResponse(quotation, index));
 };
 
+// Get total amount of a specific quotation
+export const getQuotationTotalAmount = async (quotationId: string) => {
+    const quotation = await prisma.quotation.findUnique({
+        where: { quotationId },
+        select: { totalAmount: true }
+    });
+
+    if (!quotation) {
+        throw new Error("Quotation not found");
+    }
+
+    return quotation.totalAmount;
+};
+
 // Update quotation
 export const updateQuotation = async (quotationId: string, updateData: {
     totalAmount?: number,
@@ -138,6 +182,8 @@ export const updateQuotation = async (quotationId: string, updateData: {
     lineItems?: Array<{ description: string; amount: number }> | null,
     date?: Date | null,
     projectId?: string,
+    userId?: string,
+    customerName?: string | null,
     updatedAt?: Date
 }, file?: {
     buffer: Buffer
@@ -162,6 +208,10 @@ export const updateQuotation = async (quotationId: string, updateData: {
         dataToUpdate.status = updateData.status as QuotationStatus;
     }
 
+    if (updateData.customerName !== undefined) {
+        dataToUpdate.customerName = updateData.customerName;
+    }
+
     if (updateData.lineItems !== undefined) {
         const lineItems = updateData.lineItems || [];
         dataToUpdate.lineItems = JSON.stringify(lineItems);
@@ -181,10 +231,18 @@ export const updateQuotation = async (quotationId: string, updateData: {
         dataToUpdate.project = { connect: { projectId: updateData.projectId } };
     }
 
+    if (updateData.userId !== undefined) {
+        if (updateData.userId) {
+            dataToUpdate.user = { connect: { userId: updateData.userId } };
+        } else {
+            dataToUpdate.user = { disconnect: true };
+        }
+    }
+
     // Update file fields only if file is provided
     if (file) {
         try {
-            const fileUrl = await fileUploadService.uploadFile({
+            const uploadResult = await fileUploadService.uploadFile({
                 file: file as any,
                 bucket: 'documents',
                 folder: 'quotations'
@@ -193,7 +251,8 @@ export const updateQuotation = async (quotationId: string, updateData: {
             dataToUpdate.fileData = null; // Clear buffer to save space
             dataToUpdate.fileName = file.originalname;
             dataToUpdate.fileType = file.mimetype;
-            dataToUpdate.fileUrl = fileUrl;
+            dataToUpdate.fileUrl = uploadResult.publicUrl;
+            dataToUpdate.fileId = uploadResult.id;
         } catch (error) {
             console.error("Error uploading file to Supabase:", error);
             throw new Error("Failed to upload file to storage");
@@ -222,6 +281,24 @@ export const deleteQuotation = async (quotationId: string) => {
 };
 
 /**
+ * Get quotations by User ID
+ * @param userId - The user ID to filter by
+ */
+export const getQuotationsByUserId = async (userId: string) => {
+    if (!userId) {
+        throw new Error("User ID is required");
+    }
+
+    const quotations = await prisma.quotation.findMany({
+        where: { userId },
+        include: { project: { include: { members: true } } },
+        orderBy: { createdAt: "desc" }
+    });
+
+    return quotations.map((quotation: any, index: number) => formatQuotationResponse(quotation, index));
+};
+
+/**
  * Get quotations by status
  * @param status - The status to filter by (pending, approved, rejected, locked)
  */
@@ -234,7 +311,7 @@ export const getQuotationsByStatus = async (status: string) => {
 
     const quotations = await prisma.quotation.findMany({
         where: { status: status as QuotationStatus },
-        include: { project: { include: { user: true } } },
+        include: { project: { include: { members: true } } },
         orderBy: { createdAt: "desc" }
     });
 
@@ -247,7 +324,7 @@ export const getQuotationsByStatus = async (status: string) => {
 export const getPendingQuotations = async () => {
     const quotations = await prisma.quotation.findMany({
         where: { status: QuotationStatus.pending },
-        include: { project: { include: { user: true } } },
+        include: { project: { include: { members: true } } },
         orderBy: { createdAt: "desc" }
     });
     return quotations.map((quotation: any, index: number) => formatQuotationResponse(quotation, index));
@@ -264,7 +341,7 @@ export const getQuotationsByProject = async (projectId: string) => {
 
     const quotations = await prisma.quotation.findMany({
         where: { projectId },
-        include: { project: { include: { user: true } } },
+        include: { project: { include: { members: true } } },
         orderBy: { createdAt: "desc" }
     });
 
@@ -320,11 +397,20 @@ export const approveQuotation = async (quotationId: string, userId: string) => {
     // Return with relations and format response
     const updatedQuotation = await prisma.quotation.findUnique({
         where: { quotationId },
-        include: { project: { include: { user: true } } }
+        include: { project: { include: { members: true } } }
     });
 
     if (!updatedQuotation) {
         throw new Error("Quotation not found after update");
+    }
+
+    // Notify Admins
+    try {
+        const projectName = updatedQuotation.project?.projectName || "Unknown Project";
+        const userName = (updatedQuotation.project?.members?.find((m: any) => m.role === 'user')?.userName) || "Customer";
+        await notifyAdmins(`Quotation for ${projectName} has been APPROVED by ${userName}`, "quotation_approval");
+    } catch (error) {
+        console.error("Failed to send notification:", error);
     }
 
     return formatQuotationResponse(updatedQuotation);
@@ -375,12 +461,97 @@ export const rejectQuotation = async (quotationId: string, userId: string) => {
     // Return with relations and format response
     const updatedQuotation = await prisma.quotation.findUnique({
         where: { quotationId },
-        include: { project: { include: { user: true } } }
+        include: { project: { include: { members: true } } }
     });
 
     if (!updatedQuotation) {
         throw new Error("Quotation not found after update");
     }
 
+    // Notify Admins
+    try {
+        const projectName = updatedQuotation.project?.projectName || "Unknown Project";
+        const userName = (updatedQuotation.project?.members?.find((m: any) => m.role === 'user')?.userName) || "Customer";
+        await notifyAdmins(`Quotation for ${projectName} has been REJECTED by ${userName}`, "quotation_rejection");
+    } catch (error) {
+        console.error("Failed to send notification:", error);
+    }
+
     return formatQuotationResponse(updatedQuotation);
+};
+
+/**
+ * Get quotation file details for download
+ * @param quotationId - The quotation ID
+ */
+export const getQuotationFile = async (quotationId: string) => {
+    const quotation = await prisma.quotation.findUnique({
+        where: { quotationId },
+        select: {
+            fileName: true,
+            fileType: true,
+            fileUrl: true,
+            fileData: true
+        }
+    });
+
+    if (!quotation) {
+        throw new Error("Quotation not found");
+    }
+
+    if (!quotation.fileUrl && !quotation.fileData) {
+        throw new Error("No file associated with this quotation");
+    }
+
+    return quotation;
+};
+
+/**
+ * Resend a quotation to the customer
+ * Notifies the user/customer associated with the quotation
+ * @param quotationId - The quotation ID to resend
+ */
+export const resendQuotation = async (quotationId: string) => {
+    const quotation = await prisma.quotation.findUnique({
+        where: { quotationId },
+        include: {
+            project: {
+                include: {
+                    members: true
+                }
+            }
+        }
+    });
+
+    if (!quotation) {
+        throw new Error("Quotation not found");
+    }
+
+    // Determine the customer to notify
+    // 1. Check if userId is directly on the quotation
+    // 2. Fallback to the first user member in the project
+    let customerId = quotation.userId;
+
+    if (!customerId && quotation.project) {
+        const customerMember = quotation.project.members.find((m: any) => m.role === 'user');
+        if (customerMember) {
+            customerId = customerMember.userId;
+        }
+    }
+
+    if (!customerId) {
+        throw new Error("No customer associated with this quotation to notify");
+    }
+
+    const projectName = quotation.project?.projectName || "your project";
+    const message = `Admin has resent the quotation for the project: ${projectName}. Please review it.`;
+
+    // Create notification for the customer
+    await notifyUser(customerId, message, "quotation_resend");
+
+    return {
+        success: true,
+        message: "Quotation notification resent to customer successfully",
+        quotationId
+    };
 };

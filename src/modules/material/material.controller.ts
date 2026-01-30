@@ -33,6 +33,9 @@ const MaterialServices = require("./material.services");
  *               notes:
  *                 type: string
  *                 example: "For first floor wiring"
+ *               vendor:
+ *                 type: string
+ *                 example: "ABC Supplies"
  *     responses:
  *       201:
  *         description: Material created successfully
@@ -103,13 +106,20 @@ exports.getMaterialById = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get all materials
  *     tags: [Materials]
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by material name, notes, vendor, or project name
  *     responses:
  *       200:
  *         description: Materials fetched successfully
  */
 exports.getAllMaterials = async (req: Request, res: Response) => {
     try {
-        const materials = await MaterialServices.getAllMaterials();
+        const { search } = req.query;
+        const materials = await MaterialServices.getAllMaterials(search as string);
 
         return res.status(200).json({
             success: true,
@@ -159,46 +169,7 @@ exports.getMaterialsByProject = async (req: Request, res: Response) => {
     }
 };
 
-/**
- * @swagger
- * /api/material/total-count:
- *   get:
- *     summary: Get total material count
- *     tags: [Materials]
- *     responses:
- *       200:
- *         description: Total material count fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 message:
- *                   type: string
- *                 data:
- *                   type: object
- *                   properties:
- *                     totalCount:
- *                       type: integer
- */
-exports.getTotalMaterialCount = async (req: Request, res: Response) => {
-    try {
-        const result = await MaterialServices.getTotalMaterialCount();
 
-        return res.status(200).json({
-            success: true,
-            message: "Total material count fetched successfully",
-            data: result
-        });
-    } catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : String(error),
-        });
-    }
-};
 
 /**
  * @swagger

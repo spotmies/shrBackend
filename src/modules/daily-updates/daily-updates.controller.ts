@@ -8,6 +8,14 @@ interface MulterRequest extends Omit<Request, "file" | "files"> {
     } | Express.Multer.File[];
 }
 
+interface RequestWithUser extends Request {
+    user?: {
+        userId: string;
+        email: string;
+        role: string;
+    }
+}
+
 /**
  * @swagger
  * /api/daily-updates:
@@ -172,30 +180,56 @@ export const getAllDailyUpdates = async (req: Request, res: Response) => {
 
 /**
  * @swagger
- * /api/daily-updates/stage/{constructionStage}:
+ * /api/daily-updates/supervisor/assigned-projects:
  *   get:
- *     summary: Get daily updates by construction stage
+ *     summary: Get projects assigned to the logged-in supervisor with progress
  *     tags: [Daily Updates]
- *     parameters:
- *       - in: path
- *         name: constructionStage
- *         required: true
- *         schema:
- *           type: string
- *           enum: ["Foundation", "Framing", "Plumbing & Electrical", "Interior Walls", "Painting", "Finishing"]
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Daily updates fetched successfully
+ *         description: Assigned projects fetched successfully with progress
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: array
+ *                       items:
+ *                         allOf:
+ *                           - $ref: '#/components/schemas/Project'
+ *                           - type: object
+ *                             properties:
+ *                               progress:
+ *                                 type: integer
+ *                                 description: Project completion percentage based on approved stages
+ *                                 example: 50
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized - Supervisor access required
  */
-export const getDailyUpdatesByStage = async (req: Request, res: Response) => {
+export const getDailyUpdatesForSupervisor = async (req: RequestWithUser, res: Response) => {
     try {
-        const constructionStage = req.params.constructionStage as string;
-        const dailyUpdates = await DailyUpdatesServices.getDailyUpdatesByStage(constructionStage);
+        // Ensure user is a supervisor
+        if (!req.user || req.user.role !== 'supervisor') {
+            return res.status(401).json({ success: false, message: "Unauthorized: Supervisor access required" });
+        }
+
+        const supervisorId = req.user.userId;
+        if (!supervisorId) {
+            return res.status(401).json({ success: false, message: "Supervisor ID not found in token" });
+        }
+
+        const projects = await DailyUpdatesServices.getDailyUpdatesForSupervisor(supervisorId);
 
         return res.status(200).json({
             success: true,
-            message: `Daily updates for stage '${constructionStage}' fetched successfully`,
-            data: dailyUpdates,
+            message: "Assigned projects fetched successfully",
+            data: projects,
         });
     } catch (error) {
         return res.status(400).json({
@@ -204,6 +238,8 @@ export const getDailyUpdatesByStage = async (req: Request, res: Response) => {
         });
     }
 };
+
+
 
 /**
  * @swagger
@@ -445,6 +481,285 @@ export const downloadVideo = async (req: Request, res: Response) => {
         return res.status(404).json({
             success: false,
             message: "No video URL found for this daily update"
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/daily-updates/user/status/{status}:
+ *   get:
+ *     summary: Get daily updates by status for the logged-in user
+ *     tags: [Daily Updates]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: status
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: ["pending", "approved", "rejected"]
+ *     responses:
+ *       200:
+ *         description: Daily updates fetched successfully
+ */
+export const getDailyUpdatesByStatusForUser = async (req: RequestWithUser, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        const status = req.params.status as string;
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized: User ID not found" });
+        }
+
+        const dailyUpdates = await DailyUpdatesServices.getDailyUpdatesByStatusForUser(userId, status);
+
+        return res.status(200).json({
+            success: true,
+            message: `Daily updates with status '${status}' fetched successfully`,
+            data: dailyUpdates,
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/daily-updates/{dailyUpdateId}/approve:
+ *   put:
+ *     summary: Approve a daily update (Customer)
+ *     tags: [Daily Updates]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: dailyUpdateId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Daily update approved successfully
+ */
+export const approveDailyUpdate = async (req: RequestWithUser, res: Response) => {
+    try {
+        const dailyUpdateId = req.params.dailyUpdateId as string;
+        const userId = req.user?.userId;
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized: User ID not found" });
+        }
+
+        const approvedUpdate = await DailyUpdatesServices.approveDailyUpdate(dailyUpdateId, userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Daily update approved successfully",
+            data: approvedUpdate,
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/daily-updates/{dailyUpdateId}/reject:
+ *   put:
+ *     summary: Reject a daily update (Customer)
+ *     tags: [Daily Updates]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: dailyUpdateId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Daily update rejected successfully
+ */
+export const rejectDailyUpdate = async (req: RequestWithUser, res: Response) => {
+    try {
+        const dailyUpdateId = req.params.dailyUpdateId as string;
+        const userId = req.user?.userId;
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized: User ID not found" });
+        }
+
+        const rejectedUpdate = await DailyUpdatesServices.rejectDailyUpdate(dailyUpdateId, userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Daily update rejected successfully",
+            data: rejectedUpdate,
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+
+/**
+ * @swagger
+ * /api/daily-updates/project/{projectId}/timeline:
+ *   get:
+ *     summary: Get construction timeline for a project (Admin or Supervisor)
+ *     tags: [Daily Updates]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The project ID
+ *     responses:
+ *       200:
+ *         description: Timeline fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           stage:
+ *                             type: string
+ *                           status:
+ *                             type: string
+ *                             enum: [Pending, In Progress, Completed]
+ *                           date:
+ *                             type: string
+ *                             format: date
+ *                             nullable: true
+ *       400:
+ *         description: Bad request - Project not found
+ *       401:
+ *         description: Unauthorized - Admin or Supervisor access required
+ *       403:
+ *         description: Forbidden - Supervisor not assigned to this project
+ */
+export const getConstructionTimeline = async (req: RequestWithUser, res: Response) => {
+    try {
+        const projectId = req.params.projectId as string;
+        const user = req.user;
+
+        if (!user) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        let supervisorId: string | undefined = undefined;
+
+        // If user is supervisor, pass supervisorId to service for verification
+        if (user.role === 'supervisor') {
+            supervisorId = user.userId;
+        }
+
+        const timeline = await DailyUpdatesServices.getConstructionTimeline(projectId, supervisorId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Construction timeline fetched successfully",
+            data: timeline,
+        });
+    } catch (error) {
+        // Return 403 if unauthorized access error from service
+        if (error instanceof Error && error.message.includes("Unauthorized")) {
+            return res.status(403).json({
+                success: false,
+                message: error.message
+            });
+        }
+
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/daily-updates/supervisor/stats:
+ *   get:
+ *     summary: Get supervisor statistics (pending and rejected counts)
+ *     tags: [Daily Updates]
+ *     parameters:
+ *       - in: query
+ *         name: supervisorId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The ID of the supervisor
+ *     responses:
+ *       200:
+ *         description: Statistics fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     pending:
+ *                       type: integer
+ *                       example: 5
+ *                     rejected:
+ *                       type: integer
+ *                       example: 2
+ *                     approved:
+ *                       type: integer
+ *                       example: 10
+ *       400:
+ *         description: Bad request - Supervisor ID missing
+ */
+export const getSupervisorStats = async (req: RequestWithUser, res: Response) => {
+    try {
+        // Attempt to get supervisorId from query, then from token (if authenticated)
+        const supervisorId = (req.query.supervisorId as string) || (req.user ? req.user.userId : undefined);
+
+        if (!supervisorId) {
+            return res.status(400).json({ success: false, message: "Supervisor ID is required" });
+        }
+
+        const stats = await DailyUpdatesServices.getSupervisorStats(supervisorId);
+
+        return res.status(200).json({
+            success: true,
+            data: stats
         });
     } catch (error) {
         return res.status(400).json({

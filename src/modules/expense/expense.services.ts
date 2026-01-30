@@ -38,12 +38,18 @@ export const createExpense = async (data: {
         throw new Error("Date is required");
     }
 
+    // Ensure date is a valid Date object
+    const parsedDate = new Date(data.date);
+    if (isNaN(parsedDate.getTime())) {
+        throw new Error("Invalid date format. Expected ISO-8601 DateTime string.");
+    }
+
     const newExpense = await prisma.expense.create({
         data: {
             projectId: data.projectId,
             category: data.category as ExpenseCategory,
             amount: data.amount,
-            date: data.date,
+            date: parsedDate,
             description: data.description || null,
             status: data.status as ExpenseStatus || ExpenseStatus.pending,
             createdAt: new Date(),
@@ -56,13 +62,15 @@ export const createExpense = async (data: {
 
 // Get expense by ID
 export const getExpenseById = async (expenseId: string) => {
-    if (!expenseId) {
-        throw new Error("Expense ID is required");
-    }
-
     const expense = await prisma.expense.findUnique({
         where: { expenseId },
-        include: { project: true }
+        include: {
+            project: {
+                select: {
+                    projectName: true
+                }
+            }
+        }
     });
 
     if (!expense) {
@@ -72,96 +80,98 @@ export const getExpenseById = async (expenseId: string) => {
     return expense;
 };
 
-// Get all expenses
-export const getAllExpenses = async () => {
-    const expenses = await prisma.expense.findMany({
-        include: { project: true },
-        orderBy: { createdAt: "desc" }
-    });
+// Get all expenses with optional search
+export const getAllExpenses = async (search?: string) => {
+    const whereClause: Prisma.ExpenseWhereInput = {};
 
-    if (!expenses) {
-        return [];
+    if (search) {
+        const orConditions: Prisma.ExpenseWhereInput[] = [
+            { description: { contains: search, mode: 'insensitive' } },
+            { project: { projectName: { contains: search, mode: 'insensitive' } } }
+        ];
+
+        // Check if search matches a category
+        const validCategories = ["Labor", "Equipment", "Permits", "Materials"];
+        const matchedCategory = validCategories.find(c => c.toLowerCase().includes(search.toLowerCase()));
+        if (matchedCategory) {
+            orConditions.push({ category: matchedCategory as ExpenseCategory });
+        }
+
+        whereClause.OR = orConditions;
     }
+
+    const expenses = await prisma.expense.findMany({
+        where: whereClause,
+        include: {
+            project: {
+                select: {
+                    projectName: true
+                }
+            }
+        },
+        orderBy: { date: "desc" }
+    });
     return expenses;
 };
 
 // Get expenses by project ID
 export const getExpensesByProject = async (projectId: string) => {
-    if (!projectId) {
-        throw new Error("Project ID is required");
-    }
-
     const expenses = await prisma.expense.findMany({
         where: { projectId },
-        include: { project: true },
-        orderBy: { createdAt: "desc" }
+        include: {
+            project: {
+                select: {
+                    projectName: true
+                }
+            }
+        },
+        orderBy: { date: "desc" }
     });
-
     return expenses;
 };
 
 // Get expenses by category
 export const getExpensesByCategory = async (category: string) => {
-    const validCategories = ["Labor", "Equipment", "Permits", "Materials"];
-    if (!validCategories.includes(category)) {
-        throw new Error(`Invalid category. Must be one of: ${validCategories.join(", ")}`);
-    }
-
     const expenses = await prisma.expense.findMany({
         where: { category: category as ExpenseCategory },
-        include: { project: true },
-        orderBy: { createdAt: "desc" }
+        include: {
+            project: {
+                select: {
+                    projectName: true
+                }
+            }
+        },
+        orderBy: { date: "desc" }
     });
-
-    if (!expenses) {
-        return [];
-    }
-
     return expenses;
 };
 
 // Get total expense count
 export const getTotalExpenseCount = async () => {
-    const totalCount = await prisma.expense.count();
-    return {
-        totalCount: totalCount
-    };
+    const count = await prisma.expense.count();
+    return { totalCount: count };
 };
 
 // Get total expense count by project
 export const getTotalExpenseCountByProject = async (projectId: string) => {
-    if (!projectId) {
-        throw new Error("Project ID is required");
-    }
-
     const count = await prisma.expense.count({
         where: { projectId }
     });
-
-    return {
-        projectId: projectId,
-        totalCount: count
-    };
+    return { projectId, totalCount: count };
 };
 
 // Get total expense amount by project
 export const getTotalExpenseAmountByProject = async (projectId: string) => {
-    if (!projectId) {
-        throw new Error("Project ID is required");
-    }
-
-    const expenses = await prisma.expense.findMany({
-        where: { projectId }
+    const result = await prisma.expense.aggregate({
+        where: { projectId },
+        _sum: { amount: true },
+        _count: { amount: true }
     });
 
-    const totalAmount = expenses.reduce((sum: number, expense: any) => {
-        return sum + Number(expense.amount);
-    }, 0);
-
     return {
-        projectId: projectId,
-        totalAmount: totalAmount,
-        count: expenses.length
+        projectId,
+        totalAmount: parseFloat(result._sum.amount?.toString() || "0"),
+        count: result._count.amount
     };
 };
 
@@ -169,7 +179,7 @@ export const getTotalExpenseAmountByProject = async (projectId: string) => {
 export const updateExpense = async (expenseId: string, updateData: {
     category?: string;
     amount?: number;
-    date?: Date;
+    date?: Date | string;
     description?: string | null;
     projectId?: string;
     status?: string;
@@ -212,7 +222,11 @@ export const updateExpense = async (expenseId: string, updateData: {
     }
 
     if (updateData.date !== undefined) {
-        dataToUpdate.date = updateData.date;
+        const parsedDate = new Date(updateData.date);
+        if (isNaN(parsedDate.getTime())) {
+            throw new Error("Invalid date format. Expected ISO-8601 DateTime string.");
+        }
+        dataToUpdate.date = parsedDate;
     }
 
     if (updateData.description !== undefined) {

@@ -1,5 +1,6 @@
 ﻿import prisma from "../../config/prisma.client";
-import { DocumentType, Document } from "@prisma/client";
+import { DocumentType } from "@prisma/client";
+import { fileUploadService } from "../../services/fileUpload.service";
 
 export const createDocument = async (
     data: {
@@ -29,17 +30,40 @@ export const createDocument = async (
         throw new Error(`Invalid document type. Must be one of: ${validTypes.join(", ")}`);
     }
 
+    // Upload to Supabase
+    let fileUrl: string;
+    let fileId: string;
+    try {
+        const uploadResult = await fileUploadService.uploadFile({
+            file: file as any,
+            bucket: 'documents', // Using 'documents' bucket
+            folder: 'project_docs'
+        });
+        fileUrl = uploadResult.publicUrl;
+        fileId = uploadResult.id;
+    } catch (error) {
+        console.error("Error uploading file to Supabase:", error);
+        throw new Error("Failed to upload file to storage");
+    }
+
+    const createData: any = {
+        documentType: data.documentType as DocumentType,
+        description: data.description || null,
+        fileData: Buffer.from([]), // Keeping empty buffer for compatibility if field is required
+        fileName: file.originalname,
+        fileType: file.mimetype,
+        fileUrl: fileUrl,
+        fileId: fileId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+    };
+
+    if (data.projectId) {
+        createData.project = { connect: { projectId: data.projectId } };
+    }
+
     const newDocument = await prisma.document.create({
-        data: {
-            documentType: data.documentType as DocumentType,
-            description: data.description || null,
-            projectId: data.projectId || null,
-            fileData: file.buffer as any,
-            fileName: file.originalname,
-            fileType: file.mimetype,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        }
+        data: createData
     });
 
     return newDocument;
@@ -53,6 +77,7 @@ export const getDocumentById = async (documentId: string) => {
 
     const document = await prisma.document.findUnique({
         where: { documentId },
+        include: { project: true }
     });
 
     if (!document) {
@@ -64,20 +89,22 @@ export const getDocumentById = async (documentId: string) => {
 
 
 export const getAllDocuments = async (filters?: {
-    documentType?: string;
     projectId?: string;
+    search?: string;
 }) => {
     const where: any = {};
 
-    if (filters?.documentType) {
-        const validTypes = ["Agreement", "plans", "permit", "others"];
-        if (validTypes.includes(filters.documentType)) {
-            where.documentType = filters.documentType as DocumentType;
-        }
-    }
 
     if (filters?.projectId) {
         where.projectId = filters.projectId;
+    }
+
+    if (filters?.search) {
+        where.OR = [
+            { fileName: { contains: filters.search, mode: 'insensitive' } },
+            { description: { contains: filters.search, mode: 'insensitive' } },
+            { project: { projectName: { contains: filters.search, mode: 'insensitive' } } }
+        ];
     }
 
     const documents = await prisma.document.findMany({
@@ -85,6 +112,9 @@ export const getAllDocuments = async (filters?: {
         orderBy: {
             createdAt: "desc", // Most recent first
         },
+        include: {
+            project: true
+        }
     });
 
     if (!documents) {
@@ -103,6 +133,7 @@ export const getDocumentsByType = async (documentType: string) => {
 
     const documents = await prisma.document.findMany({
         where: { documentType: documentType as DocumentType },
+        include: { project: true },
         orderBy: {
             createdAt: "desc",
         },
@@ -159,6 +190,7 @@ export const getDocumentsByProject = async (projectId: string) => {
         fileName: doc.fileName,
         documentType: doc.documentType,
         fileType: doc.fileType,
+        fileUrl: doc.fileUrl,
         description: doc.description || null,
         createdAt: doc.createdAt,
         updatedAt: doc.updatedAt
@@ -219,14 +251,31 @@ export const updateDocument = async (
 
     // Update project ID if provided
     if (updateData.projectId !== undefined) {
-        dataToUpdate.projectId = updateData.projectId;
+        if (updateData.projectId) {
+            dataToUpdate.project = { connect: { projectId: updateData.projectId } };
+        } else {
+            dataToUpdate.project = { disconnect: true };
+        }
     }
 
     // Update file if provided
     if (file) {
-        dataToUpdate.fileData = file.buffer;
-        dataToUpdate.fileName = file.originalname;
-        dataToUpdate.fileType = file.mimetype;
+        // Upload to Supabase
+        try {
+            const uploadResult = await fileUploadService.uploadFile({
+                file: file as any,
+                bucket: 'documents',
+                folder: 'project_docs'
+            });
+            dataToUpdate.fileData = Buffer.from([]); // keeping it compatible
+            dataToUpdate.fileName = file.originalname;
+            dataToUpdate.fileType = file.mimetype;
+            dataToUpdate.fileUrl = uploadResult.publicUrl;
+            dataToUpdate.fileId = uploadResult.id;
+        } catch (error) {
+            console.error("Error uploading file to Supabase:", error);
+            throw new Error("Failed to upload file to storage");
+        }
     }
 
     const updatedDocument = await prisma.document.update({
@@ -267,6 +316,7 @@ export const getDocumentFile = async (documentId: string) => {
             fileName: true,
             fileType: true,
             fileData: true,
+            fileUrl: true,
             documentType: true,
             createdAt: true,
         },
@@ -281,6 +331,7 @@ export const getDocumentFile = async (documentId: string) => {
         fileName: document.fileName,
         fileType: document.fileType,
         fileData: document.fileData,
+        fileUrl: document.fileUrl,
         documentType: document.documentType,
         createdAt: document.createdAt,
     };
@@ -320,5 +371,6 @@ export const getDocumentCountsByType = async () => {
 
     return result;
 };
+
 
 

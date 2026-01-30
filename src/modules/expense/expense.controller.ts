@@ -105,13 +105,20 @@ exports.getExpenseById = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get all expenses
  *     tags: [Expenses]
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by description, category, or project name
  *     responses:
  *       200:
  *         description: Expenses fetched successfully
  */
 exports.getAllExpenses = async (req: Request, res: Response) => {
     try {
-        const expenses = await ExpenseServices.getAllExpenses();
+        const { search } = req.query;
+        const expenses = await ExpenseServices.getAllExpenses(search as string);
 
         return res.status(200).json({
             success: true,
