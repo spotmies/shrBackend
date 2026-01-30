@@ -69,7 +69,10 @@ export const createQuotation = async (data:
             include: { members: { where: { role: 'user' }, take: 1 } }
         });
         if (projectWithMembers && projectWithMembers.members && projectWithMembers.members.length > 0) {
-            userIdToUse = projectWithMembers.members[0].userId;
+            const firstMember = projectWithMembers.members[0];
+            if (firstMember) {
+                userIdToUse = firstMember.userId;
+            }
         }
     }
 

@@ -67,6 +67,6 @@ router.post("/:quotationId/resend", adminAuthMiddleware, QuotationController.res
 // Delete quotation (Admin only)
 router.delete("/:quotationId", adminAuthMiddleware, QuotationController.deleteQuotation);
 
-module.exports = router;
+export default router;
 
 

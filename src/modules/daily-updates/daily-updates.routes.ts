@@ -59,4 +59,4 @@ router.put("/:dailyUpdateId", supervisorAuthMiddleware, upload.fields([{ name: '
 // Delete daily update (Supervisor only)
 router.delete("/:dailyUpdateId", supervisorAuthMiddleware, DailyUpdatesController.deleteDailyUpdate);
 
-module.exports = router;
+export default router;

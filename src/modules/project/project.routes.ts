@@ -26,5 +26,5 @@ router.get("/getproject/:projectId", projectController.getProjectById);
 
 router.get("/getallprojects", projectController.getAllProjects);
 
-module.exports = router;
+export default router;
 
