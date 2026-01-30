@@ -29,4 +29,4 @@ router.get("/project/:projectId", MessagesController.getMessagesByProject);
 // PATCH - Mark as read
 router.patch("/:messageId/read", MessagesController.markAsRead);
 
-module.exports = router;
+export default router;

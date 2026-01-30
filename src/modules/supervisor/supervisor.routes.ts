@@ -47,6 +47,6 @@ router.put("/:supervisorId", adminAuthMiddleware, SupervisorController.updateSup
 // Delete supervisor (Admin only)
 router.delete("/:supervisorId", adminAuthMiddleware, SupervisorController.deleteSupervisor);
 
-module.exports = router;
+export default router;
 
 

@@ -27,4 +27,4 @@ router.patch("/mark-all-read", NotificationsController.markAllAsRead);
 // Mark single notification as read
 router.patch("/:notificationId/read", NotificationsController.markAsRead);
 
-module.exports = router;
+export default router;

@@ -31,6 +31,6 @@ router.put("/:materialId", adminOrSupervisorAuthMiddleware, MaterialController.u
 // Delete material (Admin and Supervisor only - Customers cannot delete)
 router.delete("/:materialId", adminOrSupervisorAuthMiddleware, MaterialController.deleteMaterial);
 
-module.exports = router;
+export default router;
 
 

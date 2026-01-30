@@ -57,5 +57,5 @@ router.post("/:userId/approve-supervisor", customerAuthMiddleware, UserControlle
 
 router.post("/:userId/reject-supervisor", customerAuthMiddleware, UserController.rejectSupervisor);
 
-module.exports = router;
+export default router;
 

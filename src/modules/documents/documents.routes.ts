@@ -38,5 +38,5 @@ router.put("/:documentId", adminAuthMiddleware, upload.single("file"), DocumentC
 // DELETE - Delete Document (Admin only)
 router.delete("/:documentId", adminAuthMiddleware, DocumentController.deleteDocument);
 
-module.exports = router;
+export default router;
 

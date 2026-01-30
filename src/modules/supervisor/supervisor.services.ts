@@ -59,9 +59,9 @@ export const createSupervisor = async (data: {
             createdAt: new Date(),
             updatedAt: new Date(),
             userId: savedUser.userId,
-            projects: data.projectIds && data.projectIds.length > 0
-                ? { connect: data.projectIds.map((id) => ({ projectId: id })) }
-                : undefined
+            ...(data.projectIds && data.projectIds.length > 0 ? {
+                projects: { connect: data.projectIds.map((id) => ({ projectId: id })) }
+            } : {})
         }
     });
 

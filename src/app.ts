@@ -1,20 +1,19 @@
-const express = require("express");
-const cors = require("cors");
-const swaggerUi = require("swagger-ui-express");
-const swaggerSpec = require("./config/swagger");
-const projectRoutes = require("./modules/project/project.routes");
-const userRoutes = require("./modules/user/user.routes")
-const quotationsRoutes = require("./modules/quotations/quotations.routes")
-const authRoutes = require("./modules/auth/auth.routes")
-const documentsRoutes = require("./modules/documents/documents.routes")
-const paymentRoutes = require("./modules/payments/payments.routes")
-const supervisorRoutes = require("./modules/supervisor/supervisor.routes")
-const materialRoutes = require("./modules/material/material.routes")
-const expenseRoutes = require("./modules/expense/expense.routes")
-const dailyUpdatesRoutes = require("./modules/daily-updates/daily-updates.routes")
-const messagesRoutes = require("./modules/messages/messages.routes")
-const notificationsRoutes = require("./modules/notifications/notifications.routes")
-const { Request, Response } = require("express");
+import express, { Request, Response } from "express";
+import cors from "cors";
+import swaggerUi from "swagger-ui-express";
+import swaggerSpec from "./config/swagger";
+import projectRoutes from "./modules/project/project.routes";
+import userRoutes from "./modules/user/user.routes";
+import quotationsRoutes from "./modules/quotations/quotations.routes";
+import authRoutes from "./modules/auth/auth.routes";
+import documentsRoutes from "./modules/documents/documents.routes";
+import paymentRoutes from "./modules/payments/payments.routes";
+import supervisorRoutes from "./modules/supervisor/supervisor.routes";
+import materialRoutes from "./modules/material/material.routes";
+import expenseRoutes from "./modules/expense/expense.routes";
+import dailyUpdatesRoutes from "./modules/daily-updates/daily-updates.routes";
+import messagesRoutes from "./modules/messages/messages.routes";
+import notificationsRoutes from "./modules/notifications/notifications.routes";
 
 /* -------------------- U can have Routes N Middlewares imports-------------------- */
 

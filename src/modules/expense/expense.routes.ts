@@ -46,6 +46,6 @@ router.put("/:expenseId", adminOrSupervisorAuthMiddleware, ExpenseController.upd
 // Delete expense (Admin and Supervisor only - Customers cannot delete)
 router.delete("/:expenseId", adminOrSupervisorAuthMiddleware, ExpenseController.deleteExpense);
 
-module.exports = router;
+export default router;
 
 
