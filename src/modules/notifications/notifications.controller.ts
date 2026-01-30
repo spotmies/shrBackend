@@ -23,6 +23,11 @@ interface RequestWithUser extends Request {
  *         schema:
  *           type: boolean
  *         description: Filter by unread status (true for unread only, false/omitted for all)
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by notification message or type
  *     responses:
  *       200:
  *         description: Notifications fetched successfully
@@ -37,8 +42,9 @@ exports.getNotifications = async (req: RequestWithUser, res: Response) => {
 
         const unreadOnly = req.query.unreadOnly === 'true';
         const isRead = unreadOnly ? false : undefined;
+        const search = req.query.search as string;
 
-        const notifications = await NotificationServices.getNotifications(userId, isRead);
+        const notifications = await NotificationServices.getNotifications(userId, isRead, search);
 
         return res.status(200).json({
             success: true,

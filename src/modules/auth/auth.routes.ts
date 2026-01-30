@@ -18,4 +18,5 @@ router.post("/user/login", authController.userLogin);
 
 router.post("/supervisor/login", authController.supervisorLogin);
 
+
 module.exports = router;

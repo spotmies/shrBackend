@@ -73,11 +73,12 @@ export const createDailyUpdate = async (
     let imageUrl: string | null = null;
     if (image) {
         try {
-            imageUrl = await fileUploadService.uploadFile({
+            const uploadResult = await fileUploadService.uploadFile({
                 file: image,
                 bucket: 'uploads',
                 folder: 'daily-updates/images'
             });
+            imageUrl = uploadResult.publicUrl;
         } catch (error) {
             console.error("Error uploading image to Supabase:", error);
             throw new Error("Failed to upload image to storage");
@@ -88,11 +89,12 @@ export const createDailyUpdate = async (
     let videoUrl: string | null = null;
     if (video) {
         try {
-            videoUrl = await fileUploadService.uploadFile({
+            const uploadResult = await fileUploadService.uploadFile({
                 file: video,
                 bucket: 'uploads',
                 folder: 'daily-updates/videos'
             });
+            videoUrl = uploadResult.publicUrl;
         } catch (error) {
             console.error("Error uploading video to Supabase:", error);
             throw new Error("Failed to upload video to storage");
@@ -173,37 +175,57 @@ export const getAllDailyUpdates = async () => {
  * @returns List of daily updates for assigned projects
  */
 export const getDailyUpdatesForSupervisor = async (supervisorId: string) => {
-    // 1. Get all project IDs assigned to this supervisor
+    // 1. Get the project assigned to this supervisor
+    // 1. Get the projects assigned to this supervisor
+    const supervisor = await prisma.supervisor.findUnique({
+        where: { supervisorId },
+        select: {
+            projects: {
+                select: { projectId: true }
+            }
+        }
+    });
+
+    if (!supervisor || !supervisor.projects || supervisor.projects.length === 0) {
+        return [];
+    }
+
+    const projectIds = supervisor.projects.map(p => p.projectId);
+
     const assignedProjects = await prisma.project.findMany({
-        where: { supervisorId: supervisorId },
-        select: { projectId: true }
+        where: { projectId: { in: projectIds } },
+        include: {
+            dailyUpdates: {
+                where: { status: DailyUpdateStatus.approved },
+                select: { constructionStage: true }
+            }
+        }
     });
 
     if (assignedProjects.length === 0) {
         return [];
     }
 
-    const projectIds = assignedProjects.map(p => p.projectId);
+    // 2. Calculate progress for each project
+    const projectsWithProgress = assignedProjects.map(project => {
+        // Count unique approved stages
+        const uniqueStages = new Set(project.dailyUpdates.map(u => u.constructionStage));
+        const totalStages = 6; // Total number of construction stages defined in enum
 
-    // 2. Fetch daily updates where projectId is in the list of assigned project IDs
-    const dailyUpdates = await prisma.dailyUpdate.findMany({
-        where: {
-            projectId: {
-                in: projectIds
-            }
-        },
-        orderBy: { createdAt: "desc" },
-        include: {
-            project: {
-                select: {
-                    projectName: true,
-                    location: true
-                }
-            }
-        }
+        // Calculate percentage (capped at 100)
+        const progress = Math.min(Math.round((uniqueStages.size / totalStages) * 100), 100);
+
+        // Remove dailyUpdates from the result to keep it clean, or we can keep it if needed.
+        // The requirement is "calculate project progress", implying we return project info.
+        const { dailyUpdates, ...projectData } = project;
+
+        return {
+            ...projectData,
+            progress
+        };
     });
 
-    return dailyUpdates;
+    return projectsWithProgress;
 };
 
 
@@ -305,12 +327,13 @@ export const updateDailyUpdate = async (
     // Update image if provided
     if (image) {
         try {
-            const imageUrl = await fileUploadService.uploadFile({
+            const uploadResult = await fileUploadService.uploadFile({
                 file: image,
                 bucket: 'uploads',
                 folder: 'daily-updates/images'
             });
-            dataToUpdate.imageUrl = imageUrl;
+            dataToUpdate.imageUrl = uploadResult.publicUrl;
+            dataToUpdate.imageId = uploadResult.id;
             dataToUpdate.imageName = image.originalname;
             dataToUpdate.imageType = image.mimetype;
         } catch (error) {
@@ -322,12 +345,13 @@ export const updateDailyUpdate = async (
     // Update video if provided
     if (video) {
         try {
-            const videoUrl = await fileUploadService.uploadFile({
+            const uploadResult = await fileUploadService.uploadFile({
                 file: video,
                 bucket: 'uploads',
                 folder: 'daily-updates/videos'
             });
-            dataToUpdate.videoUrl = videoUrl;
+            dataToUpdate.videoUrl = uploadResult.publicUrl;
+            dataToUpdate.videoId = uploadResult.id;
         } catch (error) {
             console.error("Error uploading video to Supabase:", error);
             throw new Error("Failed to upload video to storage");
@@ -412,7 +436,9 @@ export const getDailyUpdatesByStatusForUser = async (userId: string, status: str
     // Find all projects belonging to the user
     // Assuming User <-> Project relationship (user has many projects)
     const userProjects = await prisma.project.findMany({
-        where: { userId: userId },
+        where: {
+            members: { some: { userId: userId } }
+        },
         select: { projectId: true }
     });
 
@@ -453,16 +479,32 @@ export const getDailyUpdatesByStatusForUser = async (userId: string, status: str
  */
 export const approveDailyUpdate = async (dailyUpdateId: string, userId: string) => {
     // Check if the daily update belongs to a project owned by the user
+    // Check if the daily update belongs to a project owned by the user OR user is a member
     const dailyUpdate = await prisma.dailyUpdate.findUnique({
         where: { dailyUpdateId },
-        include: { project: true }
+        include: {
+            project: {
+                include: {
+                    members: {
+                        select: { userId: true }
+                    }
+                }
+            }
+        }
     });
 
     if (!dailyUpdate) {
         throw new Error("Daily update not found");
     }
 
-    if (!dailyUpdate.project || dailyUpdate.project.userId !== userId) {
+    if (!dailyUpdate.project) {
+        throw new Error("Daily update is not linked to any project");
+    }
+
+    // Check if user is in the members list
+    const isMember = dailyUpdate.project.members.some((member: { userId: string }) => member.userId === userId);
+
+    if (!isMember) {
         throw new Error("Unauthorized: You can only approve updates for your own projects");
     }
 
@@ -494,16 +536,32 @@ export const approveDailyUpdate = async (dailyUpdateId: string, userId: string) 
  */
 export const rejectDailyUpdate = async (dailyUpdateId: string, userId: string) => {
     // Check if the daily update belongs to a project owned by the user
+    // Check if the daily update belongs to a project owned by the user OR user is a member
     const dailyUpdate = await prisma.dailyUpdate.findUnique({
         where: { dailyUpdateId },
-        include: { project: true }
+        include: {
+            project: {
+                include: {
+                    members: {
+                        select: { userId: true }
+                    }
+                }
+            }
+        }
     });
 
     if (!dailyUpdate) {
         throw new Error("Daily update not found");
     }
 
-    if (!dailyUpdate.project || dailyUpdate.project.userId !== userId) {
+    if (!dailyUpdate.project) {
+        throw new Error("Daily update is not linked to any project");
+    }
+
+    // Check if user is in the members list
+    const isMember = dailyUpdate.project.members.some((member: { userId: string }) => member.userId === userId);
+
+    if (!isMember) {
         throw new Error("Unauthorized: You can only reject updates for your own projects");
     }
 
@@ -540,8 +598,20 @@ export const getConstructionTimeline = async (projectId: string, supervisorId?: 
     }
 
     // 2. If supervisorId is provided, check if project is assigned to this supervisor
-    if (supervisorId && project.supervisorId !== supervisorId) {
-        throw new Error("Unauthorized: You are not assigned to this project");
+    if (supervisorId) {
+        const supervisor = await prisma.supervisor.findUnique({
+            where: { supervisorId },
+            include: { projects: { select: { projectId: true } } }
+        });
+
+        if (!supervisor) {
+            throw new Error("Supervisor not found");
+        }
+
+        const isAssigned = supervisor.projects.some(p => p.projectId === projectId);
+        if (!isAssigned) {
+            throw new Error("Unauthorized: You are not assigned to this project");
+        }
     }
 
     // 3. Fetch all daily updates for this project
@@ -598,4 +668,53 @@ export const getConstructionTimeline = async (projectId: string, supervisorId?: 
     });
 
     return timeline;
+};
+
+/**
+ * Get statistics for a supervisor (pending and rejected counts)
+ * @param supervisorId - The ID of the supervisor
+ * @returns Object containing pending and rejected counts
+ */
+export const getSupervisorStats = async (supervisorId: string) => {
+    if (!supervisorId) {
+        throw new Error("Supervisor ID is required");
+    }
+
+    const supervisor = await prisma.supervisor.findUnique({
+        where: { supervisorId },
+        select: { projects: { select: { projectId: true } } }
+    });
+
+    if (!supervisor || !supervisor.projects || supervisor.projects.length === 0) {
+        return { pending: 0, rejected: 0, approved: 0 };
+    }
+
+    const projectIds = supervisor.projects.map(p => p.projectId);
+
+    const pendingCount = await prisma.dailyUpdate.count({
+        where: {
+            projectId: { in: projectIds },
+            status: DailyUpdateStatus.pending
+        }
+    });
+
+    const rejectedCount = await prisma.dailyUpdate.count({
+        where: {
+            projectId: { in: projectIds },
+            status: DailyUpdateStatus.rejected
+        }
+    });
+
+    const approvedCount = await prisma.dailyUpdate.count({
+        where: {
+            projectId: { in: projectIds },
+            status: DailyUpdateStatus.approved
+        }
+    });
+
+    return {
+        pending: pendingCount,
+        rejected: rejectedCount,
+        approved: approvedCount
+    };
 };

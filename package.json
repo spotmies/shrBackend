@@ -12,9 +12,6 @@
     "prisma:generate": "npx prisma generate",
     "prisma:migrate": "npx prisma migrate dev",
     "prisma:deploy": "npx prisma migrate deploy",
-    "migration:generate": "ts-node ./node_modules/typeorm/cli.js migration:generate -d src/data-source/typeorm.ts",
-    "migration:run": "ts-node ./node_modules/typeorm/cli.js migration:run -d src/data-source/typeorm.ts",
-    "migration:revert": "ts-node ./node_modules/typeorm/cli.js migration:revert -d src/data-source/typeorm.ts",
     "setup:bucket": "npx ts-node src/scripts/createSupabaseBucket.ts",
     "setup:uploads-bucket": "npx ts-node src/scripts/createUploadsBucket.ts"
   },
@@ -42,8 +39,7 @@
     "pg": "^8.16.3",
     "reflect-metadata": "^0.2.2",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1",
-    "typeorm": "^0.3.28"
+    "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

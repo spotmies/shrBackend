@@ -7,6 +7,7 @@ export const createMaterial = async (data: {
     quantity: number;
     date: Date | string;
     notes?: string | null;
+    vendor?: string | null;
 }) => {
     // Ensure date is a valid Date object
     const parsedDate = new Date(data.date);
@@ -49,8 +50,20 @@ export const getMaterialById = async (materialId: string) => {
 };
 
 // Get all materials
-export const getAllMaterials = async () => {
+export const getAllMaterials = async (search?: string) => {
+    const where: any = {};
+
+    if (search) {
+        where.OR = [
+            { materialName: { contains: search, mode: 'insensitive' } },
+            { notes: { contains: search, mode: 'insensitive' } },
+            { vendor: { contains: search, mode: 'insensitive' } },
+            { project: { projectName: { contains: search, mode: 'insensitive' } } }
+        ];
+    }
+
     const materials = await prisma.material.findMany({
+        where,
         include: { project: true },
         orderBy: { createdAt: "desc" }
     });

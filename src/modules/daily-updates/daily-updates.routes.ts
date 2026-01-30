@@ -25,6 +25,9 @@ const { adminOrSupervisorAuthMiddleware } = require("../../middleware/adminOrSup
 // Get daily updates for assigned projects (Authenticated Supervisor) - Must come before /:dailyUpdateId
 router.get("/supervisor/assigned-projects", supervisorAuthMiddleware, DailyUpdatesController.getDailyUpdatesForSupervisor);
 
+// Get supervisor stats (Public - Supervisor ID via query param)
+router.get("/supervisor/stats", DailyUpdatesController.getSupervisorStats);
+
 // Get construction timeline for a project (Admin or Supervisor)
 router.get("/project/:projectId/timeline", adminOrSupervisorAuthMiddleware, DailyUpdatesController.getConstructionTimeline);
 

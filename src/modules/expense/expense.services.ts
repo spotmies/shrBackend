@@ -60,7 +60,120 @@ export const createExpense = async (data: {
     return newExpense;
 };
 
-// ... existing code ...
+// Get expense by ID
+export const getExpenseById = async (expenseId: string) => {
+    const expense = await prisma.expense.findUnique({
+        where: { expenseId },
+        include: {
+            project: {
+                select: {
+                    projectName: true
+                }
+            }
+        }
+    });
+
+    if (!expense) {
+        throw new Error("Expense not found");
+    }
+
+    return expense;
+};
+
+// Get all expenses with optional search
+export const getAllExpenses = async (search?: string) => {
+    const whereClause: Prisma.ExpenseWhereInput = {};
+
+    if (search) {
+        const orConditions: Prisma.ExpenseWhereInput[] = [
+            { description: { contains: search, mode: 'insensitive' } },
+            { project: { projectName: { contains: search, mode: 'insensitive' } } }
+        ];
+
+        // Check if search matches a category
+        const validCategories = ["Labor", "Equipment", "Permits", "Materials"];
+        const matchedCategory = validCategories.find(c => c.toLowerCase().includes(search.toLowerCase()));
+        if (matchedCategory) {
+            orConditions.push({ category: matchedCategory as ExpenseCategory });
+        }
+
+        whereClause.OR = orConditions;
+    }
+
+    const expenses = await prisma.expense.findMany({
+        where: whereClause,
+        include: {
+            project: {
+                select: {
+                    projectName: true
+                }
+            }
+        },
+        orderBy: { date: "desc" }
+    });
+    return expenses;
+};
+
+// Get expenses by project ID
+export const getExpensesByProject = async (projectId: string) => {
+    const expenses = await prisma.expense.findMany({
+        where: { projectId },
+        include: {
+            project: {
+                select: {
+                    projectName: true
+                }
+            }
+        },
+        orderBy: { date: "desc" }
+    });
+    return expenses;
+};
+
+// Get expenses by category
+export const getExpensesByCategory = async (category: string) => {
+    const expenses = await prisma.expense.findMany({
+        where: { category: category as ExpenseCategory },
+        include: {
+            project: {
+                select: {
+                    projectName: true
+                }
+            }
+        },
+        orderBy: { date: "desc" }
+    });
+    return expenses;
+};
+
+// Get total expense count
+export const getTotalExpenseCount = async () => {
+    const count = await prisma.expense.count();
+    return { totalCount: count };
+};
+
+// Get total expense count by project
+export const getTotalExpenseCountByProject = async (projectId: string) => {
+    const count = await prisma.expense.count({
+        where: { projectId }
+    });
+    return { projectId, totalCount: count };
+};
+
+// Get total expense amount by project
+export const getTotalExpenseAmountByProject = async (projectId: string) => {
+    const result = await prisma.expense.aggregate({
+        where: { projectId },
+        _sum: { amount: true },
+        _count: { amount: true }
+    });
+
+    return {
+        projectId,
+        totalAmount: parseFloat(result._sum.amount?.toString() || "0"),
+        count: result._count.amount
+    };
+};
 
 // Update expense
 export const updateExpense = async (expenseId: string, updateData: {

@@ -32,12 +32,15 @@ export const createDocument = async (
 
     // Upload to Supabase
     let fileUrl: string;
+    let fileId: string;
     try {
-        fileUrl = await fileUploadService.uploadFile({
+        const uploadResult = await fileUploadService.uploadFile({
             file: file as any,
             bucket: 'documents', // Using 'documents' bucket
             folder: 'project_docs'
         });
+        fileUrl = uploadResult.publicUrl;
+        fileId = uploadResult.id;
     } catch (error) {
         console.error("Error uploading file to Supabase:", error);
         throw new Error("Failed to upload file to storage");
@@ -50,6 +53,7 @@ export const createDocument = async (
         fileName: file.originalname,
         fileType: file.mimetype,
         fileUrl: fileUrl,
+        fileId: fileId,
         createdAt: new Date(),
         updatedAt: new Date(),
     };
@@ -73,6 +77,7 @@ export const getDocumentById = async (documentId: string) => {
 
     const document = await prisma.document.findUnique({
         where: { documentId },
+        include: { project: true }
     });
 
     if (!document) {
@@ -84,20 +89,22 @@ export const getDocumentById = async (documentId: string) => {
 
 
 export const getAllDocuments = async (filters?: {
-    documentType?: string;
     projectId?: string;
+    search?: string;
 }) => {
     const where: any = {};
 
-    if (filters?.documentType) {
-        const validTypes = ["Agreement", "plans", "permit", "others"];
-        if (validTypes.includes(filters.documentType)) {
-            where.documentType = filters.documentType as DocumentType;
-        }
-    }
 
     if (filters?.projectId) {
         where.projectId = filters.projectId;
+    }
+
+    if (filters?.search) {
+        where.OR = [
+            { fileName: { contains: filters.search, mode: 'insensitive' } },
+            { description: { contains: filters.search, mode: 'insensitive' } },
+            { project: { projectName: { contains: filters.search, mode: 'insensitive' } } }
+        ];
     }
 
     const documents = await prisma.document.findMany({
@@ -105,6 +112,9 @@ export const getAllDocuments = async (filters?: {
         orderBy: {
             createdAt: "desc", // Most recent first
         },
+        include: {
+            project: true
+        }
     });
 
     if (!documents) {
@@ -123,6 +133,7 @@ export const getDocumentsByType = async (documentType: string) => {
 
     const documents = await prisma.document.findMany({
         where: { documentType: documentType as DocumentType },
+        include: { project: true },
         orderBy: {
             createdAt: "desc",
         },
@@ -250,22 +261,21 @@ export const updateDocument = async (
     // Update file if provided
     if (file) {
         // Upload to Supabase
-        let fileUrl: string;
         try {
-            fileUrl = await fileUploadService.uploadFile({
+            const uploadResult = await fileUploadService.uploadFile({
                 file: file as any,
                 bucket: 'documents',
                 folder: 'project_docs'
             });
+            dataToUpdate.fileData = Buffer.from([]); // keeping it compatible
+            dataToUpdate.fileName = file.originalname;
+            dataToUpdate.fileType = file.mimetype;
+            dataToUpdate.fileUrl = uploadResult.publicUrl;
+            dataToUpdate.fileId = uploadResult.id;
         } catch (error) {
             console.error("Error uploading file to Supabase:", error);
             throw new Error("Failed to upload file to storage");
         }
-
-        dataToUpdate.fileData = Buffer.from([]); // keeping it compatible
-        dataToUpdate.fileName = file.originalname;
-        dataToUpdate.fileType = file.mimetype;
-        dataToUpdate.fileUrl = fileUrl;
     }
 
     const updatedDocument = await prisma.document.update({

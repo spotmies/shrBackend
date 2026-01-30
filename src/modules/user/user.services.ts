@@ -12,6 +12,12 @@ export const createUser = async (data: {
     estimatedInvestment?: number | null;
     notes?: string | null;
     companyName?: string | null;
+
+
+    timezone?: string | null;
+    currency?: string | null;
+    language?: string | null;
+    projectIds?: string[];
     createdAt: Date;
     updatedAt: Date;
 }) => {
@@ -26,27 +32,53 @@ export const createUser = async (data: {
     // Hash password if provided
     let hashedPassword = null;
     if (data.password && data.password.trim() !== "") {
-        hashedPassword = await bcrypt.hash(data.password, 10);
+        hashedPassword = await bcrypt.hash(data.password.trim(), 10);
+    }
+
+    // Check if any of the projects are already assigned to another user
+    if (data.projectIds && data.projectIds.length > 0) {
+        const assignedProjects = await prisma.project.findMany({
+            where: {
+                projectId: { in: data.projectIds },
+                members: { some: {} }
+            },
+            select: { projectName: true }
+        });
+
+        if (assignedProjects.length > 0) {
+            throw new Error(`Project(s) already assigned to another user: ${assignedProjects.map(p => p.projectName).join(", ")}`);
+        }
+    }
+
+    const userData: Prisma.UserCreateInput = {
+        userName: data.userName,
+        role: data.role as UserRole,
+        email: data.email,
+        password: hashedPassword,
+        contact: data.contact,
+        estimatedInvestment: data.estimatedInvestment || null,
+        notes: data.notes || null,
+        companyName: data.companyName || null,
+
+        timezone: data.timezone || "UTC",
+        currency: data.currency || "USD",
+        language: data.language || "English",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+    };
+
+    if (data.projectIds && data.projectIds.length > 0) {
+        userData.projects = {
+            connect: data.projectIds.map(projectId => ({ projectId }))
+        };
     }
 
     const newUser = await prisma.user.create({
-        data: {
-            userName: data.userName,
-            role: data.role as UserRole,
-            email: data.email,
-            password: hashedPassword,
-            contact: data.contact,
-            estimatedInvestment: data.estimatedInvestment || null,
-            notes: data.notes || null,
-            companyName: data.companyName || null,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        }
+        data: userData
     });
 
-    // Remove password from response
-    const { password: _, ...userWithoutPassword } = newUser;
-    return userWithoutPassword;
+    // Return user with password included
+    return newUser;
 };
 
 export const getUserById = async (userId: string) => {
@@ -56,7 +88,29 @@ export const getUserById = async (userId: string) => {
     }
 
     const user = await prisma.user.findUnique({
-        where: { userId }
+        where: { userId },
+        select: {
+            userId: true,
+            userName: true,
+            email: true,
+            password: true,
+            role: true,
+            contact: true,
+            estimatedInvestment: true,
+            notes: true,
+            companyName: true,
+            timezone: true,
+            currency: true,
+            language: true,
+            createdAt: true,
+            updatedAt: true,
+            projects: {
+                select: {
+                    projectId: true,
+                    projectName: true
+                }
+            }
+        }
     });
 
     if (!user) {
@@ -66,8 +120,35 @@ export const getUserById = async (userId: string) => {
     return user;
 }
 
-export const getAllUsers = async () => {
-    const users = await prisma.user.findMany();
+export const getAllUsers = async (search?: string) => {
+    const whereClause: Prisma.UserWhereInput = {};
+
+    if (search) {
+        whereClause.OR = [
+            { userName: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+            { contact: { contains: search, mode: 'insensitive' } },
+            { companyName: { contains: search, mode: 'insensitive' } }
+        ];
+    }
+
+    const users = await prisma.user.findMany({
+        where: whereClause,
+        select: {
+            userId: true,
+            userName: true,
+            email: true,
+            role: true,
+            contact: true,
+            companyName: true,
+            projects: {
+                select: {
+                    projectId: true,
+                    projectName: true
+                }
+            }
+        }
+    });
     if (!users) {
         return []
     }
@@ -83,9 +164,12 @@ export const updateUser = async (userId: string, updatedUserData: {
     estimatedInvestment?: number | null;
     notes?: string | null;
     companyName?: string | null;
+
+
     timezone?: string | null;
     currency?: string | null;
     language?: string | null;
+    projectIds?: string[];
     createdAt?: Date;
     updatedAt?: Date;
 }) => {
@@ -108,10 +192,37 @@ export const updateUser = async (userId: string, updatedUserData: {
     if (updatedUserData.notes !== undefined) dataToUpdate.notes = updatedUserData.notes;
     if (updatedUserData.companyName !== undefined) dataToUpdate.companyName = updatedUserData.companyName;
 
+
     // General Settings
     if (updatedUserData.timezone !== undefined) dataToUpdate.timezone = updatedUserData.timezone;
     if (updatedUserData.currency !== undefined) dataToUpdate.currency = updatedUserData.currency;
     if (updatedUserData.language !== undefined) dataToUpdate.language = updatedUserData.language;
+
+    // Project Associations
+    if (updatedUserData.projectIds !== undefined) {
+        // Check if any of the projects are already assigned to another user (excluding current user)
+        if (updatedUserData.projectIds.length > 0) {
+            const assignedProjects = await prisma.project.findMany({
+                where: {
+                    projectId: { in: updatedUserData.projectIds },
+                    members: {
+                        some: {
+                            userId: { not: userId }
+                        }
+                    }
+                },
+                select: { projectName: true }
+            });
+
+            if (assignedProjects.length > 0) {
+                throw new Error(`Project(s) already assigned to another user: ${assignedProjects.map(p => p.projectName).join(", ")}`);
+            }
+        }
+
+        dataToUpdate.projects = {
+            set: updatedUserData.projectIds.map(projectId => ({ projectId }))
+        };
+    }
 
     // Handle password update (hash if provided)
     if (updatedUserData.password !== undefined) {
@@ -127,9 +238,8 @@ export const updateUser = async (userId: string, updatedUserData: {
         data: dataToUpdate,
     });
 
-    // Remove password from response
-    const { password: _, ...userWithoutPassword } = updatedUser;
-    return userWithoutPassword;
+    // Return user with password included
+    return updatedUser;
 }
 
 export const deleteUser = async (userId: string) => {
@@ -148,104 +258,7 @@ export const deleteUser = async (userId: string) => {
  * Updates the supervisor's approve field to "approve"
  * @param userId - The user ID
  */
-export const approveSupervisor = async (userId: string) => {
-    // Find the user
-    const user = await prisma.user.findUnique({
-        where: { userId }
-    });
 
-    if (!user) {
-        throw new Error("User not found");
-    }
-
-    // Check if user has a supervisor assigned
-    if (!user.supervisorId) {
-        throw new Error("User does not have a supervisor assigned");
-    }
-
-    // Find the supervisor user (the user with role "supervisor" that is assigned to this user)
-    const supervisorUser = await prisma.user.findUnique({
-        where: { userId: user.supervisorId }
-    });
-
-    if (!supervisorUser) {
-        throw new Error("Supervisor user not found");
-    }
-
-    // Find the supervisor record by email (since supervisor and user share the same email)
-    const supervisor = await prisma.supervisor.findUnique({
-        where: { email: supervisorUser.email }
-    });
-
-    if (!supervisor) {
-        throw new Error("Supervisor record not found");
-    }
-
-    // Update supervisor's approve field
-    const updatedSupervisor = await prisma.supervisor.update({
-        where: { supervisorId: supervisor.supervisorId },
-        data: {
-            approve: "approve",
-            updatedAt: new Date(),
-        }
-    });
-
-    // Remove password from response
-    const { password: _, ...supervisorWithoutPassword } = updatedSupervisor;
-    return supervisorWithoutPassword;
-};
-
-/**
- * Reject supervisor for a user
- * Updates the supervisor's status field to "reject"
- * @param userId - The user ID
- */
-export const rejectSupervisor = async (userId: string) => {
-    // Find the user
-    const user = await prisma.user.findUnique({
-        where: { userId }
-    });
-
-    if (!user) {
-        throw new Error("User not found");
-    }
-
-    // Check if user has a supervisor assigned
-    if (!user.supervisorId) {
-        throw new Error("User does not have a supervisor assigned");
-    }
-
-    // Find the supervisor user (the user with role "supervisor" that is assigned to this user)
-    const supervisorUser = await prisma.user.findUnique({
-        where: { userId: user.supervisorId }
-    });
-
-    if (!supervisorUser) {
-        throw new Error("Supervisor user not found");
-    }
-
-    // Find the supervisor record by email (since supervisor and user share the same email)
-    const supervisor = await prisma.supervisor.findUnique({
-        where: { email: supervisorUser.email }
-    });
-
-    if (!supervisor) {
-        throw new Error("Supervisor record not found");
-    }
-
-    // Update supervisor's status field to "reject"
-    const updatedSupervisor = await prisma.supervisor.update({
-        where: { supervisorId: supervisor.supervisorId },
-        data: {
-            status: SupervisorStatus.reject,
-            updatedAt: new Date(),
-        }
-    });
-
-    // Remove password from response
-    const { password: _, ...supervisorWithoutPassword } = updatedSupervisor;
-    return supervisorWithoutPassword;
-};
 
 // Change password
 export const changePassword = async (userId: string, currentPassword: string, newPassword: string) => {
@@ -261,14 +274,14 @@ export const changePassword = async (userId: string, currentPassword: string, ne
     }
 
     if (user.password) {
-        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        const isMatch = await bcrypt.compare(currentPassword.trim(), user.password);
         if (!isMatch) {
             throw new Error("Current password is incorrect");
         }
     }
 
     // Update with new password
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(newPassword.trim(), 10);
 
     await prisma.user.update({
         where: { userId },
@@ -281,3 +294,111 @@ export const changePassword = async (userId: string, currentPassword: string, ne
     return { success: true, message: "Password updated successfully" };
 };
 
+// Get Customer Leads Stats
+export const getCustomerLeadsStats = async () => {
+    // New Leads: Users with at least one Inprogress project
+    const newLeadsCount = await prisma.user.count({
+        where: {
+            projects: {
+                some: {
+                    initialStatus: 'Inprogress'
+                }
+            }
+        }
+    });
+
+    // Closed Customers: Users with at least one complete or Completed project
+    const closedCustomersCount = await prisma.user.count({
+        where: {
+            projects: {
+                some: {
+                    initialStatus: { in: ['complete', 'Completed'] }
+                }
+            }
+        }
+    });
+
+    return {
+        newLeads: newLeadsCount,
+        closedCustomers: closedCustomersCount,
+        total: newLeadsCount + closedCustomersCount
+    };
+};
+
+// Get New Leads List (Users with Inprogress projects)
+export const getNewLeadsList = async () => {
+    const projects = await prisma.project.findMany({
+        where: {
+            initialStatus: 'Inprogress'
+        },
+        include: {
+            members: {
+                select: {
+                    userId: true,
+                    userName: true,
+                    contact: true
+                }
+            }
+        },
+        orderBy: {
+            startDate: 'desc'
+        }
+    });
+
+    // Flatten the results to match the required table format
+    const flatLeads: any[] = [];
+    projects.forEach(project => {
+        project.members.forEach(member => {
+            flatLeads.push({
+                userId: member.userId,
+                projectId: project.projectId,
+                customerName: member.userName,
+                projectName: project.projectName,
+                mobileNumber: member.contact,
+                projectValue: project.totalBudget,
+                date: project.startDate
+            });
+        });
+    });
+
+    return flatLeads;
+};
+
+// Get Closed Customers List (Users with complete/Completed projects)
+export const getClosedCustomersList = async () => {
+    const projects = await prisma.project.findMany({
+        where: {
+            initialStatus: { in: ['complete', 'Completed'] }
+        },
+        include: {
+            members: {
+                select: {
+                    userId: true,
+                    userName: true,
+                    contact: true
+                }
+            }
+        },
+        orderBy: {
+            startDate: 'desc'
+        }
+    });
+
+    // Flatten the results to match the required table format
+    const flatCustomers: any[] = [];
+    projects.forEach(project => {
+        project.members.forEach(member => {
+            flatCustomers.push({
+                userId: member.userId,
+                projectId: project.projectId,
+                customerName: member.userName,
+                projectName: project.projectName,
+                mobileNumber: member.contact,
+                projectValue: project.totalBudget,
+                date: project.startDate
+            });
+        });
+    });
+
+    return flatCustomers;
+};

@@ -9,6 +9,7 @@ export const createSupervisor = async (data: {
     phoneNumber: string;
     password: string;
     status?: string;
+    projectIds?: string[] | null; // Optional: Assign projects during creation
 }) => {
     // Check if supervisor with same email already exists
     const existingSupervisor = await prisma.supervisor.findFirst({
@@ -32,7 +33,7 @@ export const createSupervisor = async (data: {
     if (!data.password || data.password.trim() === "") {
         throw new Error("Password is required for supervisor");
     }
-    const hashedPassword = await bcrypt.hash(data.password, 10);
+    const hashedPassword = await bcrypt.hash(data.password.trim(), 10);
 
     // Create user account for authentication
     const savedUser = await prisma.user.create({
@@ -57,6 +58,10 @@ export const createSupervisor = async (data: {
             status: data.status as SupervisorStatus || SupervisorStatus.Active,
             createdAt: new Date(),
             updatedAt: new Date(),
+            userId: savedUser.userId,
+            projects: data.projectIds && data.projectIds.length > 0
+                ? { connect: data.projectIds.map((id) => ({ projectId: id })) }
+                : undefined
         }
     });
 
@@ -84,10 +89,10 @@ export const getSupervisorById = async (supervisorId: string) => {
         throw new Error("Supervisor not found");
     }
 
-    // Get assigned projects count
+    // Get assigned project count (historically count, but now singular projectId exists)
     const projects = await prisma.project.findMany({
-        where: { supervisorId },
-        include: { user: true }
+        where: { supervisors: { some: { supervisorId } } },
+        include: { members: { where: { role: 'user' } } }
     });
 
     // Remove password from response and add projects count
@@ -112,13 +117,12 @@ export const getSupervisorProfile = async (supervisorId: string) => {
         throw new Error("Supervisor not found");
     }
 
-    // Get project stats
     // Active: Not Completed (Planning, Inprogress, OnHold)
     const activeProjectsCount = await prisma.project.count({
         where: {
-            supervisorId,
+            supervisors: { some: { supervisorId } },
             initialStatus: {
-                not: 'Completed' as any // Type casting for now if types aren't generated yet or use ProjectStatus.Completed
+                not: 'Completed' as any
             }
         }
     });
@@ -126,7 +130,7 @@ export const getSupervisorProfile = async (supervisorId: string) => {
     // Completed: Status is Completed
     const completedProjectsCount = await prisma.project.count({
         where: {
-            supervisorId,
+            supervisors: { some: { supervisorId } },
             initialStatus: 'Completed' as any
         }
     });
@@ -141,8 +145,19 @@ export const getSupervisorProfile = async (supervisorId: string) => {
 };
 
 // Get all supervisors
-export const getAllSupervisors = async () => {
+export const getAllSupervisors = async (search?: string) => {
+    const whereClause: Prisma.SupervisorWhereInput = {};
+
+    if (search) {
+        whereClause.OR = [
+            { fullName: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+            { phoneNumber: { contains: search, mode: 'insensitive' } }
+        ];
+    }
+
     const supervisors = await prisma.supervisor.findMany({
+        where: whereClause,
         orderBy: { createdAt: "desc" }
     });
 
@@ -154,7 +169,7 @@ export const getAllSupervisors = async () => {
     const supervisorsWithCounts = await Promise.all(
         supervisors.map(async (supervisor: any) => {
             const projectsCount = await prisma.project.count({
-                where: { supervisorId: supervisor.supervisorId }
+                where: { supervisors: { some: { supervisorId: supervisor.supervisorId } } }
             });
 
             const { password: _, ...supervisorWithoutPassword } = supervisor;
@@ -175,6 +190,7 @@ export const updateSupervisor = async (supervisorId: string, updateData: {
     phoneNumber?: string;
     password?: string | null;
     status?: string;
+    projectIds?: string[] | null;
 }) => {
     const supervisor = await prisma.supervisor.findUnique({
         where: { supervisorId }
@@ -214,6 +230,14 @@ export const updateSupervisor = async (supervisorId: string, updateData: {
         }
     }
 
+    // Handle project assignment
+    if (updateData.projectIds && updateData.projectIds.length > 0) {
+        // We add the projects to the supervisor's list
+        (dataToUpdate as any).projects = {
+            connect: updateData.projectIds.map((id) => ({ projectId: id }))
+        };
+    }
+
     const updatedSupervisor = await prisma.supervisor.update({
         where: { supervisorId },
         data: dataToUpdate,
@@ -251,42 +275,23 @@ export const assignProjectToSupervisor = async (supervisorId: string, projectId:
         throw new Error("Supervisor not found");
     }
 
-    // Check if project exists
-    const project = await prisma.project.findUnique({
-        where: { projectId },
-        include: { user: true, supervisor: true }
-    });
-
-    if (!project) {
-        throw new Error("Project not found");
-    }
-
-    // Check if project is already assigned to another supervisor
-    if (project.supervisorId && project.supervisorId !== supervisorId) {
-        throw new Error("Project is already assigned to another supervisor");
-    }
-
-    // Assign project to supervisor by setting supervisorId on project
-    const updatedProject = await prisma.project.update({
-        where: { projectId },
-        data: {
-            supervisorId: supervisorId,
-            updatedAt: new Date(),
-        }
-    });
-
-    // Also update the supervisor's projectId field (primary/latest project)
+    // Assign project to supervisor by connecting to projects relation
     const updatedSupervisor = await prisma.supervisor.update({
         where: { supervisorId },
         data: {
-            projectId: projectId,
-            updatedAt: new Date()
-        }
+            projects: {
+                connect: { projectId }
+            },
+            updatedAt: new Date(),
+        },
+        include: { projects: true }
     });
+
+    const refreshedProjects = updatedSupervisor.projects;
 
     // Get projects count
     const projectsCount = await prisma.project.count({
-        where: { supervisorId }
+        where: { supervisors: { some: { supervisorId } } }
     });
 
     // Remove password from response
@@ -295,7 +300,7 @@ export const assignProjectToSupervisor = async (supervisorId: string, projectId:
     return {
         ...supervisorWithoutPassword,
         assignedProjectsCount: projectsCount,
-        assignedProject: updatedProject
+        assignedProjects: refreshedProjects
     };
 };
 
@@ -310,55 +315,34 @@ export const removeProjectFromSupervisor = async (supervisorId: string, projectI
         throw new Error("Supervisor not found");
     }
 
-    // Check if project exists and is assigned to this supervisor
-    const project = await prisma.project.findUnique({
-        where: { projectId }
-    });
-
-    if (!project) {
-        throw new Error("Project not found");
-    }
-
-    if (project.supervisorId !== supervisorId) {
-        throw new Error("Project is not assigned to this supervisor");
-    }
-
-    // Remove project assignment by setting supervisorId to null
-    await prisma.project.update({
-        where: { projectId },
+    // Remove project assignment by disconnecting from projects relation
+    const updatedSupervisor = await prisma.supervisor.update({
+        where: { supervisorId },
         data: {
-            supervisorId: null,
+            projects: {
+                disconnect: { projectId }
+            },
             updatedAt: new Date(),
         }
     });
 
-    // If the supervisor's projectId matches the removed project, clear it
-    if (supervisor.projectId === projectId) {
-        await prisma.supervisor.update({
-            where: { supervisorId },
-            data: {
-                projectId: null,
-                updatedAt: new Date()
-            }
-        });
-    }
 
     // Get supervisor (fresh fetch)
-    const updatedSupervisor = await prisma.supervisor.findUnique({
+    const freshSupervisor = await prisma.supervisor.findUnique({
         where: { supervisorId }
     });
 
-    if (!updatedSupervisor) {
+    if (!freshSupervisor) {
         throw new Error("Supervisor not found after update");
     }
 
     // Get projects count
     const projectsCount = await prisma.project.count({
-        where: { supervisorId }
+        where: { supervisors: { some: { supervisorId } } }
     });
 
     // Remove password from response
-    const { password: _, ...supervisorWithoutPassword } = updatedSupervisor;
+    const { password: _, ...supervisorWithoutPassword } = freshSupervisor;
     return {
         ...supervisorWithoutPassword,
         assignedProjectsCount: projectsCount
@@ -381,8 +365,8 @@ export const getAssignedProjectsCount = async (supervisorId: string) => {
 
     // Get assigned projects
     const projects = await prisma.project.findMany({
-        where: { supervisorId },
-        include: { user: true }
+        where: { supervisors: { some: { supervisorId } } },
+        include: { members: { where: { role: 'user' } } }
     });
 
     return {
@@ -410,8 +394,8 @@ export const getAssignedProjects = async (supervisorId: string) => {
 
     // Get all assigned projects with relations
     const projects = await prisma.project.findMany({
-        where: { supervisorId },
-        include: { user: true, supervisor: true },
+        where: { supervisors: { some: { supervisorId } } },
+        include: { supervisors: true, members: { where: { role: 'user' } } },
         orderBy: { createdAt: "desc" }
     });
 

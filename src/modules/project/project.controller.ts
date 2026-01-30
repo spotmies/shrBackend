@@ -122,7 +122,7 @@ exports.getProjectById = async (req: Request, res: Response) => {
  *         name: search
  *         schema:
  *           type: string
- *         description: Search by project name, location, or material
+ *         description: Search by project name, location, material, or notes
  *     responses:
  *       200:
  *         description: Projects fetched successfully
@@ -185,51 +185,7 @@ exports.getAllProjects = async (req: Request, res: Response) => {
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required: ["projectName", "projectType", "location", "initialStatus", "startDate", "expectedCompletion", "totalBudget", "materialName", "quantity", "notes", "userId"]
- *             properties:
- *               projectName:
- *                 type: string
- *                 maxLength: 255
- *                 example: "Smart Home Project"
- *               projectType:
- *                 type: string
- *                 enum: ["villa", "apartment", "building"]
- *                 example: "villa"
- *               location:
- *                 type: string
- *                 maxLength: 255
- *                 example: "123 Main St, City"
- *               initialStatus:
- *                 type: string
- *                 enum: ["Planning", "Inprogress", "OnHold"]
- *                 example: "Planning"
- *               startDate:
- *                 type: string
- *                 format: date
- *                 example: "2024-01-15"
- *               expectedCompletion:
- *                 type: string
- *                 format: date
- *                 example: "2024-12-31"
- *               totalBudget:
- *                 type: number
- *                 format: decimal
- *                 example: 500000.00
- *               materialName:
- *                 type: string
- *                 maxLength: 255
- *                 example: "Cement"
- *               quantity:
- *                 type: integer
- *                 example: 100
- *               notes:
- *                 type: string
- *                 example: "Additional notes about the project"
- *               userId:
- *                 type: string
- *                 format: uuid
- *                 example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
+ *             $ref: '#/components/schemas/UpdateProjectRequest'
  *     responses:
  *       200:
  *         description: Project updated successfully

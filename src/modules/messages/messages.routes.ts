@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const MessagesController = require("./messages.controller");
-import { commonAuthMiddleware } from "../../middleware/commonAuth.middleware";
+import { customerSupervisorAuthMiddleware } from "../../middleware/customerSupervisorAuth.middleware";
 
 /**
  * @swagger
@@ -10,8 +10,9 @@ import { commonAuthMiddleware } from "../../middleware/commonAuth.middleware";
  *     description: Messaging system endpoints
  */
 
-// Apply common auth middleware to all routes
-router.use(commonAuthMiddleware);
+// Apply auth middleware to all routes
+// Only customers and supervisors can access messages
+router.use(customerSupervisorAuthMiddleware);
 
 // POST - Send a message
 router.post("/", MessagesController.sendMessage);

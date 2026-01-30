@@ -147,7 +147,7 @@ model Project {
 
   @@map("projects")
 }
-
+ 
 model Supervisor {
   supervisorId String           @id @default(uuid()) @db.Uuid
   fullName     String           @db.VarChar(255)

@@ -1,11 +1,18 @@
 import prisma from "../../config/prisma.client";
 
-// Get notifications for a user (with optional read status filter)
-export const getNotifications = async (userId: string, isRead?: boolean) => {
+// Get notifications for a user (with optional read status filter and search)
+export const getNotifications = async (userId: string, isRead?: boolean, search?: string) => {
     const whereClause: any = { userId };
 
     if (isRead !== undefined) {
         whereClause.isRead = isRead;
+    }
+
+    if (search) {
+        whereClause.OR = [
+            { message: { contains: search, mode: 'insensitive' } },
+            { type: { contains: search, mode: 'insensitive' } }
+        ];
     }
 
     const notifications = await prisma.notification.findMany({

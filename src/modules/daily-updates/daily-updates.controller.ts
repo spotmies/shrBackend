@@ -182,13 +182,13 @@ export const getAllDailyUpdates = async (req: Request, res: Response) => {
  * @swagger
  * /api/daily-updates/supervisor/assigned-projects:
  *   get:
- *     summary: Get daily updates for projects assigned to the logged-in supervisor
+ *     summary: Get projects assigned to the logged-in supervisor with progress
  *     tags: [Daily Updates]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Daily updates for assigned projects fetched successfully
+ *         description: Assigned projects fetched successfully with progress
  *         content:
  *           application/json:
  *             schema:
@@ -199,7 +199,14 @@ export const getAllDailyUpdates = async (req: Request, res: Response) => {
  *                     data:
  *                       type: array
  *                       items:
- *                         $ref: '#/components/schemas/DailyUpdate'
+ *                         allOf:
+ *                           - $ref: '#/components/schemas/Project'
+ *                           - type: object
+ *                             properties:
+ *                               progress:
+ *                                 type: integer
+ *                                 description: Project completion percentage based on approved stages
+ *                                 example: 50
  *       400:
  *         description: Bad request
  *       401:
@@ -217,12 +224,12 @@ export const getDailyUpdatesForSupervisor = async (req: RequestWithUser, res: Re
             return res.status(401).json({ success: false, message: "Supervisor ID not found in token" });
         }
 
-        const dailyUpdates = await DailyUpdatesServices.getDailyUpdatesForSupervisor(supervisorId);
+        const projects = await DailyUpdatesServices.getDailyUpdatesForSupervisor(supervisorId);
 
         return res.status(200).json({
             success: true,
-            message: "Daily updates for assigned projects fetched successfully",
-            data: dailyUpdates,
+            message: "Assigned projects fetched successfully",
+            data: projects,
         });
     } catch (error) {
         return res.status(400).json({
@@ -692,6 +699,69 @@ export const getConstructionTimeline = async (req: RequestWithUser, res: Respons
             });
         }
 
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/daily-updates/supervisor/stats:
+ *   get:
+ *     summary: Get supervisor statistics (pending and rejected counts)
+ *     tags: [Daily Updates]
+ *     parameters:
+ *       - in: query
+ *         name: supervisorId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The ID of the supervisor
+ *     responses:
+ *       200:
+ *         description: Statistics fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     pending:
+ *                       type: integer
+ *                       example: 5
+ *                     rejected:
+ *                       type: integer
+ *                       example: 2
+ *                     approved:
+ *                       type: integer
+ *                       example: 10
+ *       400:
+ *         description: Bad request - Supervisor ID missing
+ */
+export const getSupervisorStats = async (req: RequestWithUser, res: Response) => {
+    try {
+        // Attempt to get supervisorId from query, then from token (if authenticated)
+        const supervisorId = (req.query.supervisorId as string) || (req.user ? req.user.userId : undefined);
+
+        if (!supervisorId) {
+            return res.status(400).json({ success: false, message: "Supervisor ID is required" });
+        }
+
+        const stats = await DailyUpdatesServices.getSupervisorStats(supervisorId);
+
+        return res.status(200).json({
+            success: true,
+            data: stats
+        });
+    } catch (error) {
         return res.status(400).json({
             success: false,
             message: error instanceof Error ? error.message : String(error),

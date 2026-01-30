@@ -197,17 +197,16 @@ exports.getDocumentById = async (req: Request, res: Response) => {
  *     tags: [Documents]
  *     parameters:
  *       - in: query
- *         name: documentType
- *         schema:
- *           type: string
- *           enum: ["Agreement", "plans", "permit", "others"]
- *         description: Filter by document type
- *       - in: query
  *         name: projectId
  *         schema:
  *           type: string
  *           format: uuid
  *         description: Filter by project ID
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by file name, description, or project name
  *     responses:
  *       200:
  *         description: Documents fetched successfully
@@ -226,8 +225,6 @@ exports.getDocumentById = async (req: Request, res: Response) => {
  *                           documentId:
  *                             type: string
  *                             format: uuid
- *                           documentType:
- *                             type: string
  *                           fileName:
  *                             type: string
  *                           fileType:
@@ -249,12 +246,13 @@ exports.getAllDocuments = async (req: Request, res: Response) => {
     try {
         const filters: any = {};
 
-        if (req.query.documentType) {
-            filters.documentType = req.query.documentType as string;
-        }
 
         if (req.query.projectId) {
             filters.projectId = req.query.projectId as string;
+        }
+
+        if (req.query.search) {
+            filters.search = req.query.search as string;
         }
 
         const documents = await DocumentServices.getAllDocuments(Object.keys(filters).length > 0 ? filters : undefined);

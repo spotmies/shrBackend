@@ -27,7 +27,6 @@ export const createProject = async (data:
         materialName?: string,
         quantity?: number,
         notes?: string,
-        userId: string,
         createdAt?: Date,
         updatedAt?: Date
     }) => {
@@ -44,14 +43,6 @@ export const createProject = async (data:
         throw new Error(`Invalid initialStatus: "${data.initialStatus}". Valid values are: ${validStatuses.join(', ')}`);
     }
 
-    // Check if User exists
-    const userExists = await prisma.user.findUnique({
-        where: { userId: data.userId }
-    });
-
-    if (!userExists) {
-        throw new Error(`User with ID ${data.userId} not found. Please provide a valid userId.`);
-    }
 
     const newProject = await prisma.project.create({
         data: {
@@ -65,7 +56,6 @@ export const createProject = async (data:
             materialName: data.materialName || "",
             quantity: data.quantity || 0,
             notes: data.notes || "",
-            userId: data.userId,
             createdAt: new Date(),
             updatedAt: new Date(),
         }
@@ -83,8 +73,7 @@ export const getProjectByProjectId = async (projectId: string) => {
     const project = await prisma.project.findUnique({
         where: { projectId },
         include: {
-            user: true,       // Include Customer details
-            supervisor: true  // Include Supervisor details
+            members: true      // Include Members details instead of removed Owner/Supervisor
         }
     });
     if (!project) {
@@ -101,7 +90,8 @@ export const getAllTheProjects = async (search?: string) => {
         whereClause.OR = [
             { projectName: { contains: search, mode: 'insensitive' } },
             { location: { contains: search, mode: 'insensitive' } },
-            { materialName: { contains: search, mode: 'insensitive' } }
+            { materialName: { contains: search, mode: 'insensitive' } },
+            { notes: { contains: search, mode: 'insensitive' } }
         ];
     }
 
@@ -128,7 +118,6 @@ export const updateProject = async (projectId: string, updateData: {
     materialName?: string,
     quantity?: number,
     notes?: string,
-    userId?: string,
     updatedAt?: Date
 } | undefined | null) => {
     // Check if updateData is provided
@@ -174,7 +163,6 @@ export const updateProject = async (projectId: string, updateData: {
     if (updateData.materialName !== undefined) dataToUpdate.materialName = updateData.materialName;
     if (updateData.quantity !== undefined) dataToUpdate.quantity = updateData.quantity;
     if (updateData.notes !== undefined) dataToUpdate.notes = updateData.notes;
-    if (updateData.userId !== undefined) dataToUpdate.user = { connect: { userId: updateData.userId } };
 
     const updatedProject = await prisma.project.update({
         where: { projectId },

@@ -124,7 +124,8 @@ model User {
   estimatedInvestment Decimal? @db.Decimal(12, 2)
   notes               String?  @db.Text
   companyName         String?  @db.VarChar(255)
-  supervisorId        String?  @db.Uuid
+  
+  projects            Project[] @relation("ProjectMembers")
   
   // General Settings
   timezone            String?  @db.VarChar(100) @default("UTC")
@@ -135,7 +136,7 @@ model User {
   updatedAt          DateTime      @updatedAt @map("updated_at")
 
   notifications      Notification[]
-  projects           Project[]
+  quotations         Quotation[]
 
   @@map("users")
 }
@@ -170,11 +171,8 @@ model Project {
   quantity           Int
   notes              String        @db.Text
   
-  userId             String?       @db.Uuid
-  user               User?         @relation(fields: [userId], references: [userId])
-  
-  supervisorId       String?       @db.Uuid
-  supervisor         Supervisor?   @relation(fields: [supervisorId], references: [supervisorId])
+  members            User[]        @relation("ProjectMembers")
+  supervisors        Supervisor[]  @relation("ProjectSupervisors")
 
   createdAt          DateTime      @default(now()) @map("created_at")
   updatedAt          DateTime      @updatedAt @map("updated_at")
@@ -220,8 +218,9 @@ model Supervisor {
   createdAt    DateTime         @default(now()) @map("created_at")
   updatedAt    DateTime         @updatedAt @map("updated_at")
 
-  projectId    String?          @db.Uuid
-  projects     Project[]
+  userId       String           @db.Uuid @unique
+  projects     Project[]        @relation("ProjectSupervisors")
+
 
   @@map("supervisors")
 }
@@ -231,10 +230,12 @@ model DailyUpdate {
   constructionStage ConstructionStage @default(Foundation)
   description       String?           @db.Text
   rawMaterials      Json?             @default("[]")
-  imageUrl          String?           @db.VarChar(500)
-  imageName         String?           @db.VarChar(255)
-  imageType         String?           @db.VarChar(100)
-  videoUrl          String?           @db.VarChar(500)
+  imageUrl          String?           @db.VarChar(500) @map("image_url")
+  imageName         String?           @db.VarChar(255) @map("image_name")
+  imageType         String?           @db.VarChar(100) @map("image_type")
+  imageId           String?           @db.VarChar(255) @map("image_id")
+  videoUrl          String?           @db.VarChar(500) @map("video_url")
+  videoId           String?           @db.VarChar(255) @map("video_id")
   status            DailyUpdateStatus @default(pending)
   
   projectId         String?           @db.Uuid
@@ -260,6 +261,7 @@ model Document {
   fileData     Bytes?       @db.ByteA
   fileName     String       @db.VarChar(255)
   fileType     String       @db.VarChar(100)
+  fileId       String?      @db.VarChar(255) @map("file_id")
   fileUrl      String?      @db.Text
   description  String?      @db.VarChar(500)
   
@@ -340,6 +342,12 @@ model Payment {
   paymentDate    DateTime      @db.Date
   remarks        String?       @db.Text
   
+  // File upload fields
+  fileUrl        String?       @db.Text @map("file_url")
+  fileId         String?       @db.VarChar(255) @map("file_id")
+  fileName       String?       @db.VarChar(255) @map("file_name")
+  fileType       String?       @db.VarChar(100) @map("file_type")
+
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
 
@@ -359,8 +367,12 @@ model Quotation {
   fileData    Bytes?          @db.ByteA
   fileName    String?         @db.VarChar(255)
   fileType    String?         @db.VarChar(100)
+  fileId      String?         @db.VarChar(255) @map("file_id")
   fileUrl     String?         @db.Text
   customerName String?        @db.VarChar(255)
+  
+  userId      String?         @db.Uuid
+  user        User?           @relation(fields: [userId], references: [userId])
   
   createdAt   DateTime        @default(now()) @map("created_at")
   updatedAt   DateTime        @updatedAt @map("updated_at")

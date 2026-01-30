@@ -106,13 +106,20 @@ exports.getMaterialById = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get all materials
  *     tags: [Materials]
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by material name, notes, vendor, or project name
  *     responses:
  *       200:
  *         description: Materials fetched successfully
  */
 exports.getAllMaterials = async (req: Request, res: Response) => {
     try {
-        const materials = await MaterialServices.getAllMaterials();
+        const { search } = req.query;
+        const materials = await MaterialServices.getAllMaterials(search as string);
 
         return res.status(200).json({
             success: true,

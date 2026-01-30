@@ -137,6 +137,13 @@ exports.updateProfile = async (req: AuthenticatedRequest, res: Response) => {
  *                 enum: ["Active", "Inactive"]
  *                 default: "Active"
  *                 example: "Active"
+ *               projectIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: uuid
+ *                 description: Optional list of project IDs to assign during creation
+ *                 example: ["123e4567-e89b-12d3-a456-426614174000", "567e4567-e89b-12d3-a456-426614174111"]
  *     responses:
  *       201:
  *         description: Supervisor created successfully
@@ -224,6 +231,12 @@ exports.getSupervisorById = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get all supervisors
  *     tags: [Supervisors]
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by fullName, email, or phoneNumber
  *     responses:
  *       200:
  *         description: Supervisors fetched successfully
@@ -241,7 +254,8 @@ exports.getSupervisorById = async (req: Request, res: Response) => {
  */
 exports.getAllSupervisors = async (req: Request, res: Response) => {
     try {
-        const supervisors = await SupervisorServices.getAllSupervisors();
+        const { search } = req.query;
+        const supervisors = await SupervisorServices.getAllSupervisors(search as string);
         return res.status(200).json({
             success: true,
             message: "Supervisors fetched successfully",
@@ -299,6 +313,13 @@ exports.getAllSupervisors = async (req: Request, res: Response) => {
  *                 type: string
  *                 enum: ["Active", "Inactive"]
  *                 example: "Active"
+ *               projectIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: uuid
+ *                 example: ["123e4567-e89b-12d3-a456-426614174000"]
+ *                 description: List of project IDs to assign (addively)
  *     responses:
  *       200:
  *         description: Supervisor updated successfully
@@ -415,10 +436,12 @@ exports.deleteSupervisor = async (req: Request, res: Response) => {
  *                           type: string
  *                         email:
  *                           type: string
- *                         projectId:
- *                           type: string
- *                         project:
- *                           type: object
+ *                         assignedProjectsCount:
+ *                           type: integer
+ *                         assignedProjects:
+ *                           type: array
+ *                           items:
+ *                             $ref: '#/components/schemas/Project'
  *       400:
  *         description: Bad request - Supervisor or project not found
  *       401:
@@ -494,6 +517,11 @@ exports.assignProjectToSupervisor = async (req: Request, res: Response) => {
  *                   properties:
  *                     data:
  *                       type: object
+ *                       properties:
+ *                         supervisorId:
+ *                           type: string
+ *                         assignedProjectsCount:
+ *                           type: integer
  *       400:
  *         description: Bad request - Supervisor or project not found
  *       401:

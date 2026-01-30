@@ -83,12 +83,16 @@ const options = {
               description: "Company name",
               example: "ABC Construction Ltd",
             },
-            supervisorId: {
-              type: "string",
-              format: "uuid",
-              nullable: true,
-              description: "Assigned supervisor's user ID",
-              example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553",
+            projects: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  projectId: { type: "string", format: "uuid" },
+                  projectName: { type: "string" }
+                }
+              },
+              description: "List of projects the user is associated with"
             },
             timezone: {
               type: "string",
@@ -139,11 +143,6 @@ const options = {
               maxLength: 255,
               example: "Smart Home Project",
             },
-            description: {
-              type: "string",
-              maxLength: 255,
-              example: "A smart home automation project",
-            },
             projectType: {
               type: "string",
               enum: ["villa", "apartment", "building"],
@@ -154,19 +153,45 @@ const options = {
               maxLength: 255,
               example: "123 Main St, City",
             },
-            progress: {
+            initialStatus: {
+              type: "string",
+              enum: ["Planning", "Inprogress", "OnHold", "Completed"],
+              example: "Planning",
+            },
+            startDate: {
+              type: "string",
+              format: "date",
+              example: "2024-01-15",
+            },
+            expectedCompletion: {
+              type: "string",
+              format: "date",
+              example: "2024-12-31",
+            },
+            totalBudget: {
+              type: "number",
+              format: "decimal",
+              example: 500000.00,
+            },
+            materialName: {
+              type: "string",
+              maxLength: 255,
+              example: "Cement",
+            },
+            quantity: {
               type: "integer",
-              example: 0,
+              example: 100,
             },
-            status: {
+            notes: {
               type: "string",
-              enum: ["planning", "in_progress", "completed", "on_hold"],
-              example: "planning",
+              example: "Initial notes for the project",
             },
-            userId: {
-              type: "string",
-              format: "uuid",
-              description: "Associated user ID",
+            members: {
+              type: "array",
+              items: {
+                $ref: '#/components/schemas/User'
+              },
+              description: "Project members (returned when included)"
             },
             createdAt: {
               type: "string",
@@ -175,6 +200,71 @@ const options = {
             updatedAt: {
               type: "string",
               format: "date-time",
+            },
+          },
+        },
+        Supervisor: {
+          type: "object",
+          properties: {
+            supervisorId: {
+              type: "string",
+              format: "uuid",
+            },
+            userId: {
+              type: "string",
+              format: "uuid",
+              description: "Associated User ID for authentication",
+            },
+            fullName: {
+              type: "string",
+              maxLength: 255,
+              example: "Robert Smith",
+            },
+            email: {
+              type: "string",
+              maxLength: 100,
+              format: "email",
+              example: "robert.s@example.com",
+            },
+            phoneNumber: {
+              type: "string",
+              maxLength: 15,
+              example: "1234567890",
+            },
+            status: {
+              type: "string",
+              enum: ["Active", "Inactive", "reject"],
+              example: "Active",
+            },
+            approve: {
+              type: "string",
+              nullable: true,
+              example: "approved",
+            },
+            rating: {
+              type: "number",
+              format: "decimal",
+              example: 4.5,
+            },
+            createdAt: {
+              type: "string",
+              format: "date-time",
+            },
+            updatedAt: {
+              type: "string",
+              format: "date-time",
+            },
+            assignedProjectsCount: {
+              type: "integer",
+              description: "Number of projects assigned to this supervisor",
+              example: 5,
+            },
+            projects: {
+              type: "array",
+              items: {
+                $ref: '#/components/schemas/Project'
+              },
+              description: "List of projects assigned to this supervisor"
             },
           },
         },
@@ -225,11 +315,13 @@ const options = {
               description: "Company name (optional)",
               example: "ABC Construction Ltd",
             },
-            supervisorId: {
-              type: "string",
-              format: "uuid",
-              description: "Assigned supervisor's user ID (optional)",
-              example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553",
+            projectIds: {
+              type: "array",
+              items: {
+                type: "string",
+                format: "uuid"
+              },
+              description: "List of project IDs to associate with the user"
             },
             timezone: {
               type: "string",
@@ -253,17 +345,12 @@ const options = {
         },
         CreateProjectRequest: {
           type: "object",
-          required: ["projectName", "description", "projectType", "location", "progress", "status", "userId"],
+          required: ["projectName", "projectType", "location", "initialStatus", "startDate", "expectedCompletion", "totalBudget", "userId"],
           properties: {
             projectName: {
               type: "string",
               maxLength: 255,
               example: "Smart Home Project",
-            },
-            description: {
-              type: "string",
-              maxLength: 255,
-              example: "A smart home automation project",
             },
             projectType: {
               type: "string",
@@ -275,19 +362,94 @@ const options = {
               maxLength: 255,
               example: "123 Main St, City",
             },
-            progress: {
+            initialStatus: {
+              type: "string",
+              enum: ["Planning", "Inprogress", "OnHold", "Completed"],
+              example: "Planning",
+            },
+            startDate: {
+              type: "string",
+              format: "date",
+              example: "2024-01-15",
+            },
+            expectedCompletion: {
+              type: "string",
+              format: "date",
+              example: "2024-12-31",
+            },
+            totalBudget: {
+              type: "number",
+              format: "decimal",
+              example: 500000.00,
+            },
+            materialName: {
+              type: "string",
+              maxLength: 255,
+              example: "Cement",
+              description: "Initial material name (optional)",
+            },
+            quantity: {
               type: "integer",
-              example: 0,
+              example: 100,
+              description: "Initial material quantity (optional)",
             },
-            status: {
+            notes: {
               type: "string",
-              enum: ["planning", "in_progress", "completed", "on_hold"],
-              example: "planning",
+              example: "Project notes",
+              description: "Additional project notes (optional)",
             },
-            userId: {
+          },
+        },
+        UpdateProjectRequest: {
+          type: "object",
+          properties: {
+            projectName: {
               type: "string",
-              format: "uuid",
-              example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553",
+              maxLength: 255,
+              example: "Updated Home Project",
+            },
+            projectType: {
+              type: "string",
+              enum: ["villa", "apartment", "building"],
+              example: "villa",
+            },
+            location: {
+              type: "string",
+              maxLength: 255,
+              example: "456 Oak St, City",
+            },
+            initialStatus: {
+              type: "string",
+              enum: ["Planning", "Inprogress", "OnHold", "Completed"],
+              example: "Inprogress",
+            },
+            startDate: {
+              type: "string",
+              format: "date",
+              example: "2024-02-01",
+            },
+            expectedCompletion: {
+              type: "string",
+              format: "date",
+              example: "2025-01-31",
+            },
+            totalBudget: {
+              type: "number",
+              format: "decimal",
+              example: 650000.00,
+            },
+            materialName: {
+              type: "string",
+              maxLength: 255,
+              example: "Steel",
+            },
+            quantity: {
+              type: "integer",
+              example: 250,
+            },
+            notes: {
+              type: "string",
+              example: "Updated project details",
             },
           },
         },

@@ -22,6 +22,10 @@ router.post("/", adminAuthMiddleware, upload.single("file"), QuotationController
 // Get total amount of a specific quotation (Public/Admin)
 router.get("/:quotationId/total-amount", QuotationController.getQuotationTotalAmount);
 
+// Download quotation file
+router.get("/:quotationId/download", QuotationController.downloadQuotation);
+
+
 // Get all quotations (Public or Admin)
 router.get("/", QuotationController.getAllQuotations);
 
@@ -38,6 +42,9 @@ router.get("/status/:status", userAuthMiddleware, QuotationController.getQuotati
 // Get quotations by project (must be before /:quotationId route)
 router.get("/project/:projectId", userAuthMiddleware, QuotationController.getQuotationsByProject);
 
+// Get quotations by user (must be before /:quotationId route)
+router.get("/user/:userId", userAuthMiddleware, QuotationController.getQuotationsByUserId);
+
 // Approve quotation (must be before /:quotationId route)
 router.post("/:quotationId/approve", userAuthMiddleware, QuotationController.approveQuotation);
 
@@ -53,6 +60,9 @@ router.get("/:quotationId", QuotationController.getQuotationById);
 
 // Update quotation (Admin only)
 router.put("/:quotationId", adminAuthMiddleware, upload.single("file"), QuotationController.updateQuotation);
+
+// Resend quotation (Admin only)
+router.post("/:quotationId/resend", adminAuthMiddleware, QuotationController.resendQuotation);
 
 // Delete quotation (Admin only)
 router.delete("/:quotationId", adminAuthMiddleware, QuotationController.deleteQuotation);

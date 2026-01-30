@@ -16,59 +16,75 @@ import { generateAdminToken, generateUserToken } from "../../utils/jwt";
 
 
 export const adminLogin = async (email: string, password: string) => {
-    // Validate email
-    if (!email || email.trim() === "") {
-        throw new Error("Email is required");
-    }
+    // 1. Initial Validation & Trimming
+    const trimmedEmail = email ? email.trim() : "";
+    const trimmedPassword = password ? password.trim() : "";
 
-    // Validate password
-    if (!password || password.trim() === "") {
-        throw new Error("Password is required");
-    }
+    console.log(`[adminLogin DEBUG] Attempting login for email: "${trimmedEmail}"`);
 
-    // Step 1: Check Database for Admin User
+    if (!trimmedEmail) throw new Error("Email is required");
+    if (!trimmedPassword) throw new Error("Password is required");
+
+    // 2. Database Lookup (Directly targeting Admin role)
+    // We filter by role here to avoid getting a non-admin user with the same email
     let user = await prisma.user.findFirst({
-        where: { email: email.trim() }
+        where: {
+            email: { equals: trimmedEmail, mode: 'insensitive' },
+            role: UserRole.admin
+        },
+        select: {
+            userId: true,
+            userName: true,
+            email: true,
+            password: true,
+            role: true,
+            contact: true,
+            companyName: true
+        }
     });
 
-    // Check if the found user is actually an admin
-    if (user && user.role !== UserRole.admin) {
-        throw new Error("Access denied. Not an admin account.");
-    }
-
+    // 3. Password Verification (If user found in DB)
     if (user) {
-        // Step 2: User Exists in DB - Validate with DB Password
+        console.log(`[adminLogin DEBUG] User found in DB. ID: ${user.userId}, Email: ${user.email}`);
         if (!user.password) {
-            throw new Error("Admin user exists but has no password set. Please reset via database or contact support.");
+            console.log(`[adminLogin DEBUG] User has no password set.`);
+            throw new Error("Admin user exists but has no password set. Please contact support.");
         }
 
-        const isPasswordValid = await bcrypt.compare(password, user.password);
+        const isPasswordValid = await bcrypt.compare(trimmedPassword, user.password);
+        console.log(`[adminLogin DEBUG] Password validation result: ${isPasswordValid}`);
+
         if (!isPasswordValid) {
             throw new Error("Invalid email or password");
         }
     } else {
-        // Step 3: User Does NOT Exist in DB - Fallback to Env Credentials (Bootstrap)
-
-        // Get admin credentials from .env
+        console.log(`[adminLogin DEBUG] User NOT found in DB. Checking bootstrap...`);
+        // 4. Fallback Bootstrap check (If user not in DB)
         const adminEmailFn = process.env.ADMIN_EMAIL;
         const adminPasswordFn = process.env.ADMIN_PASSWORD;
 
         if (!adminEmailFn || !adminPasswordFn) {
+            console.log(`[adminLogin DEBUG] Admin env vars missing.`);
             throw new Error("Admin credentials are not configured in environment variables");
         }
 
-        // Exact match check
-        if (email.trim() !== adminEmailFn || password !== adminPasswordFn) {
-            // Note: We return generic error to avoid enumeration, but locally we know it's the Env check failing.
+        // Exact match against env vars
+        const envEmailMatch = trimmedEmail.toLowerCase() === adminEmailFn.trim().toLowerCase();
+        const envPassMatch = trimmedPassword === adminPasswordFn.trim();
+
+        console.log(`[adminLogin DEBUG] Env Match - Email: ${envEmailMatch}, Password: ${envPassMatch}`);
+
+        if (!envEmailMatch || !envPassMatch) {
             throw new Error("Invalid email or password");
         }
 
-        // Valid Env Credentials! -> Bootstrap the Admin User in DB
-        const hashedPassword = await bcrypt.hash(password, 10);
+        // Bootstrap Admin User
+        console.log(`[adminLogin DEBUG] Bootstrapping admin user...`);
+        const hashedPassword = await bcrypt.hash(trimmedPassword, 10);
         user = await prisma.user.create({
             data: {
                 userName: "Admin",
-                email: email.trim(),
+                email: trimmedEmail.toLowerCase(),
                 role: UserRole.admin,
                 contact: "0000000000",
                 password: hashedPassword,
@@ -78,9 +94,9 @@ export const adminLogin = async (email: string, password: string) => {
         });
     }
 
-    // Generate JWT token
+    // 5. Success
     const token = generateAdminToken(user.email);
-
+    console.log(`[adminLogin DEBUG] Login successful for: ${user.email}`);
     return {
         success: true,
         message: "Login successful",
@@ -98,55 +114,44 @@ export const adminLogin = async (email: string, password: string) => {
  * @returns Login result with token
  */
 export const userLogin = async (email: string, password: string) => {
-    // Validate email
-    if (!email || email.trim() === "") {
-        throw new Error("Email is required");
-    }
+    // 1. Initial Validation & Trimming
+    const trimmedEmail = email ? email.trim() : "";
+    const trimmedPassword = password ? password.trim() : "";
 
-    // Validate password
-    if (!password || password.trim() === "") {
-        throw new Error("Password is required");
-    }
+    if (!trimmedEmail) throw new Error("Email is required");
+    if (!trimmedPassword) throw new Error("Password is required");
 
-    // Get user from database
+    // 2. Database Lookup
     const user = await prisma.user.findFirst({
-        where: { email: email.trim() }
+        where: {
+            email: { equals: trimmedEmail, mode: 'insensitive' },
+            role: UserRole.user
+        },
+        select: {
+            userId: true,
+            userName: true,
+            email: true,
+            password: true,
+            role: true
+        }
     });
 
     if (!user) {
         throw new Error("Invalid email or password");
     }
 
-    // Check if user has password set
+    // 3. Password Verification
     if (!user.password) {
-        throw new Error("Password not set for this user. Please contact administrator.");
+        throw new Error("Password not set for this account. Please contact administrator.");
     }
 
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-
+    const isPasswordValid = await bcrypt.compare(trimmedPassword, user.password);
     if (!isPasswordValid) {
         throw new Error("Invalid email or password");
     }
 
-    // Check if user is admin (admins should use admin login)
-    if (user.role === UserRole.admin) {
-        throw new Error("Admin users should use admin login endpoint");
-    }
-
-    // Check if user is supervisor (supervisors should use supervisor login)
-    if (user.role === UserRole.supervisor) {
-        throw new Error("Supervisor users should use supervisor login endpoint");
-    }
-
-    // Check if user has valid role (only "user" allowed)
-    if (user.role !== UserRole.user) {
-        throw new Error("Invalid user role. This endpoint is for regular users only.");
-    }
-
-    // Generate JWT token
+    // 4. Success
     const token = generateUserToken(user.email, user.role);
-
     return {
         success: true,
         message: "Login successful",
@@ -164,45 +169,44 @@ export const userLogin = async (email: string, password: string) => {
  * @returns Login result with token
  */
 export const supervisorLogin = async (email: string, password: string) => {
-    // Validate email
-    if (!email || email.trim() === "") {
-        throw new Error("Email is required");
-    }
+    // 1. Initial Validation & Trimming
+    const trimmedEmail = email ? email.trim() : "";
+    const trimmedPassword = password ? password.trim() : "";
 
-    // Validate password
-    if (!password || password.trim() === "") {
-        throw new Error("Password is required");
-    }
+    if (!trimmedEmail) throw new Error("Email is required");
+    if (!trimmedPassword) throw new Error("Password is required");
 
-    // Get user from database
+    // 2. Database Lookup
     const user = await prisma.user.findFirst({
-        where: { email: email.trim() }
+        where: {
+            email: { equals: trimmedEmail, mode: 'insensitive' },
+            role: UserRole.supervisor
+        },
+        select: {
+            userId: true,
+            userName: true,
+            email: true,
+            password: true,
+            role: true
+        }
     });
 
     if (!user) {
         throw new Error("Invalid email or password");
     }
 
-    // Check if user has password set
+    // 3. Password Verification
     if (!user.password) {
         throw new Error("Password not set for this supervisor. Please contact administrator.");
     }
 
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-
+    const isPasswordValid = await bcrypt.compare(trimmedPassword, user.password);
     if (!isPasswordValid) {
         throw new Error("Invalid email or password");
     }
 
-    // Check if user is supervisor
-    if (user.role !== UserRole.supervisor) {
-        throw new Error("Access denied. This endpoint is for supervisors only.");
-    }
-
-    // Generate JWT token
+    // 4. Success
     const token = generateUserToken(user.email, user.role);
-
     return {
         success: true,
         message: "Supervisor login successful",

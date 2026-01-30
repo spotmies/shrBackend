@@ -14,6 +14,10 @@ const { userAuthMiddleware } = require("../../middleware/userAuth.middleware");
 
 
 router.get("/", UserController.getAllUsers);
+router.get("/leads/stats", adminAuthMiddleware, UserController.getCustomerLeadsStats);
+router.get("/leads/new", adminAuthMiddleware, UserController.getNewLeads);
+router.get("/leads/closed", adminAuthMiddleware, UserController.getClosedCustomers);
+
 
 
 

@@ -115,6 +115,12 @@ exports.getuserById = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get all users
  *     tags: [Users]
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by userName, email, contact, or companyName
  *     responses:
  *       200:
  *         description: Users fetched successfully
@@ -139,7 +145,8 @@ exports.getuserById = async (req: Request, res: Response) => {
 //GETALL
 exports.getAllUsers = async (req: Request, res: Response) => {
     try {
-        const users = await UserServices.getAllUsers();
+        const { search } = req.query;
+        const users = await UserServices.getAllUsers(search as string);
         return res.status(200).json({
             success: true,
             message: "Users feched successfully",
@@ -212,11 +219,13 @@ exports.getAllUsers = async (req: Request, res: Response) => {
  *                 maxLength: 255
  *                 example: "ABC Construction Ltd"
  *                 description: Company name (optional)
- *               supervisorId:
- *                 type: string
- *                 format: uuid
- *                 example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
- *                 description: Assigned supervisor ID (optional)
+ *               projectIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: uuid
+ *                 description: List of project IDs to associate with the user (optional)
+ *
  *               timezone:
  *                 type: string
  *                 maxLength: 100
@@ -1138,6 +1147,90 @@ exports.changeUserPassword = async (req: AuthRequest, res: Response) => {
             success: true,
             message: result.message,
             data: {}
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/leads/stats:
+ *   get:
+ *     summary: Get customer leads and closed customers stats
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Stats fetched successfully
+ */
+exports.getCustomerLeadsStats = async (req: Request, res: Response) => {
+    try {
+        const stats = await UserServices.getCustomerLeadsStats();
+        return res.status(200).json({
+            success: true,
+            message: "Customer leads stats fetched successfully",
+            data: stats
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/leads/new:
+ *   get:
+ *     summary: Get list of new leads (Users with Inprogress projects)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: New leads fetched successfully
+ */
+exports.getNewLeads = async (req: Request, res: Response) => {
+    try {
+        const leads = await UserServices.getNewLeadsList();
+        return res.status(200).json({
+            success: true,
+            message: "New leads fetched successfully",
+            data: leads
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/leads/closed:
+ *   get:
+ *     summary: Get list of closed customers (Users with Completed projects)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Closed customers fetched successfully
+ */
+exports.getClosedCustomers = async (req: Request, res: Response) => {
+    try {
+        const customers = await UserServices.getClosedCustomersList();
+        return res.status(200).json({
+            success: true,
+            message: "Closed customers fetched successfully",
+            data: customers
         });
     } catch (error) {
         return res.status(400).json({

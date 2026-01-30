@@ -11,6 +11,56 @@ interface MulterRequest extends Request {
 
 /**
  * @swagger
+ * /api/quotations/user/{userId}:
+ *   get:
+ *     summary: Get quotations by User ID
+ *     tags: [Quotations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The user ID to filter by
+ *     responses:
+ *       200:
+ *         description: Quotations fetched successfully
+ *       400:
+ *         description: Bad request - Invalid User ID
+ *       401:
+ *         description: Unauthorized - User authentication required
+ */
+exports.getQuotationsByUserId = async (req: Request, res: Response) => {
+    try {
+        const userId = req.params.userId as string;
+
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                message: "User ID is required"
+            });
+        }
+
+        const quotations = await QuotationServices.getQuotationsByUserId(userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Quotations fetched successfully",
+            data: quotations
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
  * /api/quotations:
  *   post:
  *     summary: Create a new quotation (Admin only)
@@ -302,7 +352,6 @@ exports.getQuotationById = async (req: Request, res: Response) => {
  *                           customerName:
  *                             type: string
  *                           customerEmail:
- *                             type: string
  *                           status:
  *                             type: string
  *                           date:
@@ -968,3 +1017,96 @@ exports.rejectQuotation = async (req: Request, res: Response) => {
 };
 
 
+
+/**
+ * @swagger
+ * /api/quotations/{quotationId}/download:
+ *   get:
+ *     summary: Download a quotation file
+ *     tags: [Quotations]
+ *     parameters:
+ *       - in: path
+ *         name: quotationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The quotation ID
+ *     responses:
+ *       200:
+ *         description: File downloaded successfully
+ *         content:
+ *           application/octet-stream:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       400:
+ *         description: Bad request - Quotation not found
+ */
+exports.downloadQuotation = async (req: Request, res: Response) => {
+    try {
+        const quotationId = req.params.quotationId as string;
+        const quotationFile = await QuotationServices.getQuotationFile(quotationId);
+
+        // If we have a fileUrl (Supabase), redirect to it
+        if (quotationFile.fileUrl) {
+            return res.redirect(quotationFile.fileUrl);
+        }
+
+        // Fallback for files stored in DB (buffer)
+        if (quotationFile.fileData && quotationFile.fileData.length > 0) {
+            res.setHeader('Content-Type', quotationFile.fileType || 'application/octet-stream');
+            res.setHeader('Content-Disposition', `attachment; filename="${quotationFile.fileName || 'quotation'}"`);
+            return res.status(200).send(quotationFile.fileData);
+        }
+
+        return res.status(404).json({
+            success: false,
+            message: "File content not found"
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/quotations/{quotationId}/resend:
+ *   post:
+ *     summary: Resend a quotation notification to the customer (Admin only)
+ *     tags: [Quotations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: quotationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The quotation ID to resend
+ *     responses:
+ *       200:
+ *         description: Quotation resent successfully
+ *       400:
+ *         description: Bad request - Quotation not found or customer not found
+ *       401:
+ *         description: Unauthorized
+ */
+exports.resendQuotation = async (req: Request, res: Response) => {
+    try {
+        const quotationId = req.params.quotationId as string;
+        const result = await QuotationServices.resendQuotation(quotationId);
+
+        return res.status(200).json(result);
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
