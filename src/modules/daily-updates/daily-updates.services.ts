@@ -5,6 +5,7 @@ import { notifyAdmins, notifyUser } from "../notifications/notifications.service
 import SocketService from "../../services/socket.service";
 import * as projectService from "../project/project.services";
 import * as supervisorService from "../supervisor/supervisor.services";
+import { RawMaterial, QuantityConsumption, LabourWorkers } from "./daily-updates.schema";
 
 /**
  * Create a new daily update
@@ -19,11 +20,7 @@ export const createDailyUpdate = async (
         description?: string | null;
         workCompleted?: string | null;
         projectId?: string | null;
-        rawMaterials?: Array<{
-            materialName: string;
-            quantity: number;
-            notes?: string;
-        }> | null;
+        rawMaterials?: RawMaterial[] | null;
         status?: string;
     },
     image?: any,
@@ -53,15 +50,9 @@ export const createDailyUpdate = async (
     }
 
     // Validate rawMaterials structure if provided
+    // Structural validation is now handled by Zod in the controller
     if (data.rawMaterials && Array.isArray(data.rawMaterials)) {
-        for (const material of data.rawMaterials) {
-            if (!material.materialName || material.materialName.trim() === "") {
-                throw new Error("Material name is required for each raw material");
-            }
-            if (material.quantity === undefined || material.quantity < 0) {
-                throw new Error("Quantity must be a non-negative number for each raw material");
-            }
-        }
+        // Basic mapping or additional business logic can go here if needed
     }
 
     // Validate projectId if provided
@@ -195,8 +186,8 @@ export const createDailyUpdate = async (
 export const createAdminDailyUpdate = async (
     data: {
         projectId?: string | null;
-        quantityConsumption?: Array<any> | null;
-        labourWorkers?: Array<any> | null;
+        quantityConsumption?: QuantityConsumption[] | null;
+        labourWorkers?: LabourWorkers[] | null;
     },
     image?: any,
     supervisorId?: string
@@ -219,40 +210,8 @@ export const createAdminDailyUpdate = async (
     }
     projectName = project.projectName;
 
-    // Validate quantityConsumption structure if provided
-    if (data.quantityConsumption && Array.isArray(data.quantityConsumption)) {
-        for (const consumption of data.quantityConsumption) {
-            // Support multiple key variations that the frontend might be sending
-            const matName = consumption.materialName || consumption.material || consumption.MaterialName || consumption.name;
-            if (!matName || String(matName).trim() === "") {
-                throw new Error("Material name is required for each consumption entry");
-            }
-
-            const totQty = consumption.totalQuantity || consumption.quantity || consumption.TotalQuantity || consumption.total;
-            if (totQty === undefined || String(totQty).trim() === "") {
-                throw new Error("Total quantity is required for each consumption entry");
-            }
-
-            const cons = consumption.consumed || consumption.Consumed || consumption.consumedQuantity || consumption.usage;
-            if (cons === undefined || String(cons).trim() === "") {
-                throw new Error("Consumed quantity is required for each consumption entry");
-            }
-
-            const dt = consumption.date || consumption.Date || consumption.consumptionDate;
-            if (!dt || String(dt).trim() === "") {
-                throw new Error("Date is required for each consumption entry");
-            }
-        }
-    }
-
-    // Validate labourWorkers structure if provided
-    if (data.labourWorkers && Array.isArray(data.labourWorkers)) {
-        for (const worker of data.labourWorkers) {
-            if (worker.noOfLabours === undefined || worker.noOfLabours === null) {
-                throw new Error("No. of Labours is required for each worker entry");
-            }
-        }
-    }
+    // Structural validation is now handled by Zod in the controller
+    // We can keep specific business logic here if needed beyond structure validation
 
     // Upload image to Supabase if provided
     let imageUrl: string | null = null;
@@ -342,21 +301,15 @@ export const getDailyUpdateById = async (dailyUpdateId: string) => {
     }
 
     // Parse rawMaterials
-    let parsedRawMaterials = dailyUpdate.rawMaterials;
-    for (let i = 0; i < 3; i++) {
-        if (typeof parsedRawMaterials === 'string') {
-            try {
-                parsedRawMaterials = JSON.parse(parsedRawMaterials);
-            } catch (e) {
-                break;
-            }
-        } else {
-            break;
+    let parsedRawMaterials: RawMaterial[] = [];
+    if (dailyUpdate.rawMaterials) {
+        try {
+            parsedRawMaterials = typeof dailyUpdate.rawMaterials === 'string' 
+                ? JSON.parse(dailyUpdate.rawMaterials) 
+                : dailyUpdate.rawMaterials as unknown as RawMaterial[];
+        } catch (e) {
+            parsedRawMaterials = [];
         }
-    }
-
-    if (!parsedRawMaterials || !Array.isArray(parsedRawMaterials)) {
-        parsedRawMaterials = [];
     }
 
     return {
@@ -454,14 +407,27 @@ export const getAllAdminDailyUpdates = async (
     });
 
     return dailyUpdates.map(update => {
-        let parsedQuantityConsumption = update.quantityConsumption;
-        let parsedLabourWorkers = update.labourWorkers;
+        let parsedQuantityConsumption: QuantityConsumption[] = [];
+        let parsedLabourWorkers: LabourWorkers[] = [];
 
-        if (typeof parsedQuantityConsumption === 'string') {
-            try { parsedQuantityConsumption = JSON.parse(parsedQuantityConsumption); } catch (e) { parsedQuantityConsumption = []; }
+        if (update.quantityConsumption) {
+            try {
+                parsedQuantityConsumption = typeof update.quantityConsumption === 'string'
+                    ? JSON.parse(update.quantityConsumption)
+                    : update.quantityConsumption as unknown as QuantityConsumption[];
+            } catch (e) {
+                parsedQuantityConsumption = [];
+            }
         }
-        if (typeof parsedLabourWorkers === 'string') {
-            try { parsedLabourWorkers = JSON.parse(parsedLabourWorkers); } catch (e) { parsedLabourWorkers = []; }
+
+        if (update.labourWorkers) {
+            try {
+                parsedLabourWorkers = typeof update.labourWorkers === 'string'
+                    ? JSON.parse(update.labourWorkers)
+                    : update.labourWorkers as unknown as LabourWorkers[];
+            } catch (e) {
+                parsedLabourWorkers = [];
+            }
         }
 
         return {
@@ -539,11 +505,9 @@ export const updateDailyUpdate = async (
         description?: string | null;
         workCompleted?: string | null;
         projectId?: string | null;
-        rawMaterials?: Array<{
-            materialName: string;
-            quantity: number;
-            notes?: string;
-        }> | null;
+        rawMaterials?: RawMaterial[] | null;
+        quantityConsumption?: QuantityConsumption[] | null;
+        labourWorkers?: LabourWorkers[] | null;
         status?: string;
     },
     image?: any,
@@ -622,6 +586,32 @@ export const updateDailyUpdate = async (
         } else {
             dataToUpdate.rawMaterials = Prisma.JsonNull;
         }
+    }
+
+    // Update quantityConsumption if provided
+    if (updateData.quantityConsumption !== undefined) {
+        if (Array.isArray(updateData.quantityConsumption)) {
+            // Validate structure
+            for (const consumption of updateData.quantityConsumption) {
+                if (!consumption.materialName || String(consumption.materialName).trim() === "") {
+                    throw new Error("Material name is required for each consumption entry");
+                }
+                if (!consumption.date || String(consumption.date).trim() === "") {
+                    throw new Error("Date is required for each consumption entry");
+                }
+                if (!consumption.unit || String(consumption.unit).trim() === "") {
+                    throw new Error("Unit is required for each consumption entry");
+                }
+            }
+            dataToUpdate.quantityConsumption = JSON.stringify(updateData.quantityConsumption);
+        } else {
+            dataToUpdate.quantityConsumption = Prisma.JsonNull;
+        }
+    }
+
+    // Update labourWorkers if provided
+    if (updateData.labourWorkers !== undefined) {
+        dataToUpdate.labourWorkers = updateData.labourWorkers ? JSON.stringify(updateData.labourWorkers) : Prisma.JsonNull;
     }
 
     // Update image if provided
